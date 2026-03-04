@@ -1,0 +1,93 @@
+/* ── Win11 Fluent Design Tokens ── */
+
+:root {
+  /* Surface */
+  --bg-mica: #f3f3f3;
+  --bg-surface: #ffffff;
+  --bg-surface-secondary: #f9f9f9;
+  --bg-hover: #e8e8e8;
+  --bg-selected: #cce4f7;
+  --bg-selected-inactive: #e0e0e0;
+  --bg-menu: #ffffff;
+  --bg-dialog: #ffffff;
+
+  /* Accent */
+  --accent: #0078d4;
+  --accent-hover: #106ebe;
+  --accent-text: #003e73;
+
+  /* Text */
+  --text-primary: #1a1a1a;
+  --text-secondary: #5c5c5c;
+  --text-disabled: #a0a0a0;
+
+  /* Change highlights */
+  --change-add-bg: #dff6dd;
+  --change-add-text: #1a7f1a;
+  --change-modify-bg: #fff0d4;
+  --change-modify-text: #c05800;
+  --change-delete-bg: #fde7e9;
+  --change-delete-text: #c42b1c;
+
+  /* Borders */
+  --border-default: #e0e0e0;
+  --border-subtle: #ebebeb;
+
+  /* Sizing */
+  --menu-height: 28px;
+  --tree-indent: 20px;
+  --row-height: 22px;
+  --font-size: 12px;
+  --font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Shadows */
+  --shadow-flyout: 0 2px 8px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.18), 0 0 4px rgba(0, 0, 0, 0.10);
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+}
+
+/* ── Reset ── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  color: var(--text-primary);
+  background: var(--bg-mica);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── Scrollbar (Win11 style) ── */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
