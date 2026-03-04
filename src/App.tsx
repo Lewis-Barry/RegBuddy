@@ -7,15 +7,18 @@ import { ChangesPanel } from './components/layout/ChangesPanel';
 import { TreePanel } from './components/tree/TreePanel';
 import { ValuePanel } from './components/values/ValuePanel';
 import { ExportScriptsDialog } from './components/dialogs/ExportScriptsDialog';
+import { RegCompareDialog } from './components/dialogs/RegCompareDialog';
 
 const App: React.FC = () => {
-  const [showExport, setShowExport] = useState(false);
+  const [showExport, setShowExport]   = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
-  const handleGetScripts = () => setShowExport(true);
+  const handleGetScripts  = () => { setShowCompare(false); setShowExport(true); };
+  const handleCompare     = () => { setShowExport(false);  setShowCompare(true); };
 
   return (
     <div className="regedit" style={{ position: 'relative' }}>
-      <MenuBar onGetScripts={handleGetScripts} />
+      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} />
       <AddressBar />
       <SplitPane
         left={<TreePanel />}
@@ -24,7 +27,8 @@ const App: React.FC = () => {
       />
       <ChangesPanel onGetScripts={handleGetScripts} />
       <StatusBar />
-      {showExport && <ExportScriptsDialog onBack={() => setShowExport(false)} />}
+      {showExport  && <ExportScriptsDialog onBack={() => setShowExport(false)} />}
+      {showCompare && <RegCompareDialog    onBack={() => setShowCompare(false)} />}
     </div>
   );
 };

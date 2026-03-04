@@ -69,7 +69,7 @@ For **Intune > Devices > Scripts (PowerShell)**:
 
 1. Click **Get Scripts** → select **Remediation Script** mode
 2. Download **both** the Detection and Remediation scripts
-3. In Intune portal: Reports → Endpoint Analytics → Proactive Remediations → Create script package
+3. In Intune portal: Devices → Scripts and Remediations → Remediations → Create
 4. Upload detection script and remediation script separately
 5. Set run context and schedule, assign to groups
 

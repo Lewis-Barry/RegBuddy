@@ -6,6 +6,7 @@ import {
   generateDetectionScript,
   suggestProfileName,
 } from '../../registry/powershellGenerator';
+import { computeReversalChanges } from '../../registry/reversal';
 import { PowerShellHighlight } from './PowerShellHighlight';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,20 +132,31 @@ interface ExportScriptsDialogProps {
 
 export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack }) => {
   const changes = useRegBuddyStore((s) => s.changes);
+  const baseline = useRegBuddyStore((s) => s.baseline);
 
   const [profileName, setProfileName] = useState(() => suggestProfileName(changes));
   const [mode, setMode] = useState<DeploymentMode>('platform');
   const [activeTab, setActiveTab] = useState<ScriptTab>(() => mode === 'remediation' ? 'detection' : 'remediation');
   const [copiedTab, setCopiedTab] = useState<ScriptTab | null>(null);
   const [changesCollapsed, setChangesCollapsed] = useState(false);
+  const [reversalMode, setReversalMode] = useState(false);
+
+  // Compute reversal changes (what the script needs to apply to undo everything)
+  const reversalResult = useMemo(
+    () => computeReversalChanges(changes, baseline),
+    [changes, baseline],
+  );
+
+  // Active working set — either the original changes or the reversed ones
+  const activeChanges = reversalMode ? reversalResult.reversed : changes;
 
   const remediationScript = useMemo(
-    () => generateRemediationScript(changes, profileName),
-    [changes, profileName],
+    () => generateRemediationScript(activeChanges, profileName),
+    [activeChanges, profileName],
   );
   const detectionScript = useMemo(
-    () => generateDetectionScript(changes, profileName),
-    [changes, profileName],
+    () => generateDetectionScript(activeChanges, profileName),
+    [activeChanges, profileName],
   );
 
   // When switching to platform mode, force remediation tab
@@ -162,7 +174,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
 
   const currentScript = activeTab === 'detection' ? detectionScript : remediationScript;
 
-  // Group changes by category
+  // Group changes by category (uses the active set — original or reversed)
   const grouped = useMemo(() => {
     const groups: Record<string, RegistryChange[]> = {
       'add-key':       [],
@@ -173,11 +185,11 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
       'rename-value':  [],
       'delete-value':  [],
     };
-    for (const c of changes) {
+    for (const c of activeChanges) {
       groups[c.type]?.push(c);
     }
     return groups;
-  }, [changes]);
+  }, [activeChanges]);
 
   const orderedGroups: [string, RegistryChange[]][] = [
     ['add-key',       grouped['add-key']],
@@ -237,8 +249,25 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
           Back
         </button>
         <div className="confirmPage-title">
-          Export Scripts
-          <span className="confirmPage-title-sub">{changes.length} change{changes.length !== 1 ? 's' : ''}</span>
+          {reversalMode ? 'Reversal Script' : 'Export Scripts'}
+          <span className="confirmPage-title-sub">
+            {reversalMode
+              ? `${reversalResult.reversed.length} reversal op${reversalResult.reversed.length !== 1 ? 's' : ''}`
+              : `${changes.length} change${changes.length !== 1 ? 's' : ''}`}
+          </span>
+        </div>
+        <div className="confirmPage-header-actions">
+          <button
+            className={`confirmPage-reversal-btn${reversalMode ? ' active' : ''}`}
+            onClick={() => setReversalMode((v) => !v)}
+            title="Toggle reversal mode — generates a script that undoes all listed changes"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+              <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+            </svg>
+            Reversal Mode
+          </button>
         </div>
       </div>
 
@@ -287,11 +316,34 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
                 <span className="export-mode-radio" />
                 <span className="export-mode-text">
                   <strong>Remediation Script</strong>
-                  <small>Two scripts — upload to Intune &gt; Proactive Remediations</small>
+                  <small>Two scripts — upload to Intune &gt; Scripts and Remediations &gt; Remediations</small>
                 </span>
               </label>
             </div>
           </div>
+
+          {/* Reversal mode warning banner */}
+          {reversalMode && (
+            <div className="reversal-banner">
+              <div className="reversal-banner-header">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+                </svg>
+                Reversal mode — script will undo all changes
+              </div>
+              {reversalResult.warnings.length > 0 && (
+                <div className="reversal-banner-warnings">
+                  <div className="reversal-banner-warnings-title">
+                    ⚠ {reversalResult.warnings.length} change{reversalResult.warnings.length !== 1 ? 's' : ''} skipped (original value unknown):
+                  </div>
+                  {reversalResult.warnings.map((w, i) => (
+                    <div key={i} className="reversal-warning-item">{w}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Changes summary (collapsible) */}
           <div className="export-changes-toggle" onClick={() => setChangesCollapsed(!changesCollapsed)}>
@@ -303,7 +355,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             >
               <path d="M3 1 L7 5 L3 9" fill="none" stroke="currentColor" strokeWidth="1.2" />
             </svg>
-            Changes summary ({changes.length})
+            {reversalMode ? `Reversal operations (${reversalResult.reversed.length})` : `Changes summary (${changes.length})`}
           </div>
           {!changesCollapsed && (
             <div className="confirmPage-changesList">
@@ -377,7 +429,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             ) : (
               <>
                 <strong>Intune Remediation Scripts:</strong>{' '}
-                Reports &rarr; Endpoint Analytics &rarr; Proactive Remediations &rarr; Create script package.
+                Devices &rarr; Scripts and Remediations &rarr; Remediations &rarr; Create.
                 Upload both <code>detection</code> and <code>remediation</code> scripts separately.
                 Set run context and schedule, assign to groups.
                 <em> (Requires Intune P2 / Intune Suite licensing)</em>

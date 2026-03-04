@@ -4,9 +4,10 @@ import { RegistryValueType } from '../../registry/types';
 
 interface MenuBarProps {
   onGetScripts?: () => void;
+  onCompare?: () => void;
 }
 
-export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts }) => {
+export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => {
   const loadBaseline = useRegBuddyStore((s) => s.loadBaseline);
   const changes = useRegBuddyStore((s) => s.changes);
   const clearAllChanges = useRegBuddyStore((s) => s.clearAllChanges);
@@ -124,6 +125,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts }) => {
       { label: 'Import .reg as changes...', onClick: handleImportAsChanges },
       { label: 'separator', separator: true },
       { label: 'Get Scripts...', onClick: onGetScripts, disabled: changes.length === 0 },
+      { label: 'separator', separator: true },
+      { label: 'Compare .reg files…', onClick: onCompare },
       { label: 'separator', separator: true },
       { label: 'Reset to default baseline', onClick: () => loadBaseline() },
     ],

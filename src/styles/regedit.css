@@ -769,6 +769,77 @@
   gap: 8px;
 }
 
+/* ── Reversal mode button ── */
+.confirmPage-reversal-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid var(--change-delete-text, #d9534f);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--change-delete-text, #d9534f);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.confirmPage-reversal-btn:hover {
+  background: color-mix(in srgb, var(--change-delete-text, #d9534f) 12%, transparent);
+}
+
+.confirmPage-reversal-btn.active {
+  background: var(--change-delete-text, #d9534f);
+  color: #fff;
+  border-color: var(--change-delete-text, #d9534f);
+}
+
+.confirmPage-reversal-btn.active:hover {
+  background: color-mix(in srgb, var(--change-delete-text, #d9534f) 85%, #000);
+}
+
+/* ── Reversal mode banner ── */
+.reversal-banner {
+  margin: 8px 12px 0;
+  border: 1px solid color-mix(in srgb, var(--change-delete-text, #d9534f) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--change-delete-text, #d9534f) 8%, transparent);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.reversal-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--change-delete-text, #d9534f);
+}
+
+.reversal-banner-warnings {
+  border-top: 1px solid color-mix(in srgb, var(--change-delete-text, #d9534f) 30%, transparent);
+  padding: 6px 10px;
+}
+
+.reversal-banner-warnings-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-warning, #c8a52a);
+  margin-bottom: 4px;
+}
+
+.reversal-warning-item {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 0 2px 10px;
+  line-height: 1.45;
+}
+
 .confirmPage-btn {
   display: flex;
   align-items: center;
@@ -1240,3 +1311,351 @@
   gap: 6px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   Compare .reg files dialog
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Left panel override — a bit wider than the export panel */
+.cmp-left {
+  min-width: 280px;
+  max-width: 320px;
+}
+
+/* ── File loader cards ── */
+
+.cmp-file-card {
+  margin: 10px 12px 0;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.cmp-file-card.loaded {
+  border-style: solid;
+  border-color: var(--border-default);
+}
+
+.cmp-file-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 4px;
+  background: var(--bg-surface-secondary);
+}
+
+.cmp-file-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.cmp-file-role--primary {
+  background: var(--change-add-bg);
+  color: var(--change-add-text);
+}
+
+.cmp-file-role--secondary {
+  background: var(--change-modify-bg);
+  color: var(--change-modify-text);
+}
+
+.cmp-file-card-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.cmp-file-loaded {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--text-secondary);
+}
+
+.cmp-file-name {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-file-count {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cmp-file-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cmp-file-clear:hover {
+  color: var(--change-delete-text);
+}
+
+.cmp-file-pick {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-family);
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cmp-file-pick:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Stats bar ── */
+
+.cmp-stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 4px;
+}
+
+.cmp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  min-width: 52px;
+}
+
+.cmp-stat--add {
+  background: var(--change-add-bg);
+  color: var(--change-add-text);
+}
+
+.cmp-stat--delete {
+  background: var(--change-delete-bg);
+  color: var(--change-delete-text);
+}
+
+.cmp-stat--modify {
+  background: var(--change-modify-bg);
+  color: var(--change-modify-text);
+}
+
+.cmp-stat-count {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.cmp-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Empty / hint states ── */
+
+.cmp-empty-hint {
+  margin: 16px 12px 0;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-secondary);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.cmp-empty-hint code {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  background: var(--bg-hover);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.cmp-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cmp-title-identical {
+  color: var(--change-add-text) !important;
+}
+
+/* ── Diff panel ── */
+
+.cmp-diff-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0 12px;
+}
+
+.cmp-diff-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-surface-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cmp-diff-group {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+  margin-bottom: 0;
+}
+
+.cmp-diff-group-path {
+  padding: 6px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  background: var(--bg-surface-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmp-diff-row {
+  padding: 5px 12px;
+  border-left: 3px solid transparent;
+}
+
+.cmp-diff-row.add {
+  background: color-mix(in srgb, var(--change-add-bg) 40%, transparent);
+  border-left-color: var(--change-add-text);
+}
+
+.cmp-diff-row.delete {
+  background: color-mix(in srgb, var(--change-delete-bg) 40%, transparent);
+  border-left-color: var(--change-delete-text);
+}
+
+.cmp-diff-row.modify {
+  background: color-mix(in srgb, var(--change-modify-bg) 40%, transparent);
+  border-left-color: var(--change-modify-text);
+}
+
+.cmp-diff-row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cmp-diff-path {
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-diff-path-parent {
+  color: var(--text-secondary);
+}
+
+.cmp-diff-path-leaf {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cmp-diff-valname {
+  font-size: 11px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cmp-diff-data-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 3px;
+  padding-left: 2px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.cmp-diff-data-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.cmp-diff-type-pill {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--change-add-bg);
+  color: var(--change-add-text);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.cmp-diff-type-pill.secondary {
+  background: var(--change-delete-bg);
+  color: var(--change-delete-text);
+}
+
+.cmp-diff-data {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-diff-data.old {
+  color: var(--change-delete-text);
+  text-decoration: line-through;
+}
