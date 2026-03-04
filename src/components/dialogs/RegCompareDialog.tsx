@@ -146,6 +146,9 @@ const DiffRow: React.FC<{ entry: RegDiffEntry }> = ({ entry: e }) => {
         {!isKeyLevel && e.valueName !== undefined && (
           <span className="cmp-diff-valname">{e.valueName || '(Default)'}</span>
         )}
+        {e.type === 'key-removed' && (
+          <span className="cmp-diff-key-skip-note">not deleted by script — keys are never removed</span>
+        )}
       </div>
 
       {e.type === 'value-added' && (
@@ -195,7 +198,7 @@ interface StatsBarProps {
 const StatsBar: React.FC<StatsBarProps> = (props) => {
   const items = [
     { label: 'Keys to add',    count: props.keysAdded,      cls: 'add' },
-    { label: 'Keys to delete', count: props.keysRemoved,     cls: 'delete' },
+    { label: 'Keys (info only — not deleted)', count: props.keysRemoved, cls: 'delete' },
     { label: 'Values to add',  count: props.valuesAdded,     cls: 'add' },
     { label: 'Values to del',  count: props.valuesRemoved,   cls: 'delete' },
     { label: 'Values changed', count: props.valuesModified,  cls: 'modify' },
@@ -495,7 +498,7 @@ export const RegCompareDialog: React.FC<RegCompareDialogProps> = ({ onBack }) =>
                 <div className="cmp-diff-scroll">
                   <div className="cmp-diff-legend">
                     <span className="badge add">ADD / ADD KEY</span> exists in primary, missing from secondary
-                    <span className="badge delete" style={{ marginLeft: 12 }}>DEL / DEL KEY</span> exists in secondary, not in primary
+                    <span className="badge delete" style={{ marginLeft: 12 }}>DEL / DEL KEY</span> exists in secondary, not in primary — <em>DEL KEY shown for info only, script will not delete keys</em>
                     <span className="badge modify" style={{ marginLeft: 12 }}>MOD</span> value differs between files
                   </div>
                   {groupedDiff.map(([path, entries]) => (
@@ -513,13 +516,25 @@ export const RegCompareDialog: React.FC<RegCompareDialogProps> = ({ onBack }) =>
                 </div>
               )}
 
-              {/* Intune note when on script tab */}
+              {/* Key-deletion safety notice + Intune note when on script tab */}
               {rightTab === 'script' && (
-                <div className="confirmPage-intune-note">
-                  <strong>Restore script:</strong>{' '}
-                  Applies changes to the secondary system to bring it in line with the primary .reg file.
-                  Upload as an Intune Platform Script (Devices &rarr; Scripts) or as a Remediation Script pair.
-                </div>
+                <>
+                  {diffResult!.stats.keysRemoved > 0 && (
+                    <div className="cmp-key-skip-banner">
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0 }}>
+                        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                      </svg>
+                      <span>
+                        <strong>{diffResult!.stats.keysRemoved} key{diffResult!.stats.keysRemoved !== 1 ? 's' : ''} in secondary only</strong> — keys are never deleted by the restore script to avoid breaking critical systems. Remove them manually if needed.
+                      </span>
+                    </div>
+                  )}
+                  <div className="confirmPage-intune-note">
+                    <strong>Restore script:</strong>{' '}
+                    Applies changes to the secondary system to bring it in line with the primary .reg file.
+                    Upload as an Intune Platform Script (Devices &rarr; Scripts) or as a Remediation Script pair.
+                  </div>
+                </>
               )}
             </>
           )}

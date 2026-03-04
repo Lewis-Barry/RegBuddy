@@ -1681,6 +1681,37 @@
   flex-shrink: 0;
 }
 
+/* Inline note on key-removed rows explaining the key won't be deleted */
+.cmp-diff-key-skip-note {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-disabled);
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Safety banner shown above the restore script when keys-only-in-secondary exist */
+.cmp-key-skip-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 12px 0;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--change-modify-text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--change-modify-text) 35%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.cmp-key-skip-banner svg {
+  color: var(--change-modify-text);
+  margin-top: 1px;
+}
+
 .cmp-diff-data-row {
   display: flex;
   align-items: baseline;

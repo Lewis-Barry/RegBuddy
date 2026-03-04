@@ -124,11 +124,11 @@ export function diffRegTrees(primary: RegistryKey, secondary: RegistryKey): RegD
     }
   }
 
-  // Keys only in secondary → secondary needs to delete them
+  // Keys only in secondary — shown in diff for info, but NEVER deleted by the restore script
   for (const path of secondaryPaths) {
     if (!primaryPaths.has(path)) {
       entries.push({ type: 'key-removed', path });
-      restoreChanges.push({ id: cmpId(), type: 'delete-key', path, timestamp: now });
+      // Intentional: no delete-key added to restoreChanges — removing keys could break critical systems.
     }
   }
 
