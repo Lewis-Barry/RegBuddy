@@ -22,31 +22,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => 
   const isKeyChanged = useRegBuddyStore((s) => s.isKeyChanged);
   const expandedNodes = useRegBuddyStore((s) => s.expandedNodes);
   const toggleExpand = useRegBuddyStore((s) => s.toggleExpand);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const importAsChangesRef = useRef<HTMLInputElement>(null);
+  const importRegAsChanges = useRegBuddyStore((s) => s.importRegAsChanges);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-
-  const handleImportReg = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
 
   const handleImportAsChanges = useCallback(() => {
     importAsChangesRef.current?.click();
   }, []);
-
-  const importRegAsChanges = useRegBuddyStore((s) => s.importRegAsChanges);
-
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      loadBaseline(text);
-      e.target.value = '';
-    },
-    [loadBaseline],
-  );
 
   const handleImportAsChangesFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,14 +104,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => 
 
   const menus: Record<string, { label: string; disabled?: boolean; separator?: boolean; onClick?: () => void }[]> = {
     File: [
-      { label: 'Import .reg as baseline...', onClick: handleImportReg },
       { label: 'Import .reg as changes...', onClick: handleImportAsChanges },
       { label: 'separator', separator: true },
       { label: 'Get Scripts...', onClick: onGetScripts, disabled: changes.length === 0 },
       { label: 'separator', separator: true },
       { label: 'Compare .reg files…', onClick: onCompare },
       { label: 'separator', separator: true },
-      { label: 'Reset to default baseline', onClick: () => loadBaseline() },
+      { label: 'Reset baseline', onClick: () => loadBaseline() },
     ],
     Edit: [
       { label: 'New Key', onClick: handleNewKey, disabled: !isNotComputer },
@@ -161,13 +143,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => 
 
   return (
     <div className="menuBar">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".reg"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
       <input
         ref={importAsChangesRef}
         type="file"

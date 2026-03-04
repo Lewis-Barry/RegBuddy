@@ -1,50 +1,239 @@
 /**
- * Sample baseline registry data (subset) so the UI works out of the box
- * without needing a real .reg export.
+ * Skeleton baseline registry data.
  *
- * This is a representative slice — enough to demonstrate the tree + values UI.
+ * Purpose: give the tree enough structure so users can navigate to common
+ * destinations without typing full paths — particularly the paths cited in
+ * KB articles, security advisories, and vendor "apply this reg fix" docs.
+ *
+ * Deliberately excludes:
+ *   - HKCR  (file associations — not a target for Intune-deployed reg fixes)
+ *   - \Policies\* and \PolicyManager  (GPO / MDM CSP output paths — not inputs)
+ *   - HARDWARE\DESCRIPTION  (read-only machine identity, never written via Intune)
+ *   - HKU\.DEFAULT  (rarely targeted; users can add the path manually)
+ *
+ * Values shown are Windows 11 defaults where known, or absent where the key
+ * is typically only populated after a deliberate change.
  */
 
 export const SAMPLE_REG_FILE = `Windows Registry Editor Version 5.00
 
-[HKEY_CLASSES_ROOT]
+; ─────────────────────────────────────────────────────────────────────────────
+; HKEY_LOCAL_MACHINE
+; ─────────────────────────────────────────────────────────────────────────────
 
-[HKEY_CLASSES_ROOT\\.txt]
-@="txtfile"
-"Content Type"="text/plain"
-"PerceivedType"="text"
+[HKEY_LOCAL_MACHINE]
 
-[HKEY_CLASSES_ROOT\\.txt\\OpenWithProgids]
-"txtfile"=""
+[HKEY_LOCAL_MACHINE\\SOFTWARE]
 
-[HKEY_CLASSES_ROOT\\.exe]
-@="exefile"
-"Content Type"="application/x-msdownload"
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft]
 
-[HKEY_CLASSES_ROOT\\.dll]
-@="dllfile"
-"Content Type"="application/x-msdownload"
+; ── OS identity (reference only — these ship with Windows, you don't set them) ──
 
-[HKEY_CLASSES_ROOT\\.bat]
-@="batfile"
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT]
 
-[HKEY_CLASSES_ROOT\\.cmd]
-@="cmdfile"
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion]
+"ProductName"="Windows 11 Pro"
+"DisplayVersion"="24H2"
+"CurrentBuildNumber"="26100"
+"EditionID"="Professional"
+"InstallationType"="Client"
+"RegisteredOrganization"=""
+"RegisteredOwner"=""
 
-[HKEY_CLASSES_ROOT\\.ps1]
-@="Microsoft.PowerShellScript.1"
-"Content Type"="text/plain"
+; ── Shell / Explorer behaviour ──
 
-[HKEY_CLASSES_ROOT\\txtfile]
-@="Text Document"
-"FriendlyTypeName"="@%SystemRoot%\\\\system32\\\\notepad.exe,-469"
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows]
 
-[HKEY_CLASSES_ROOT\\txtfile\\shell]
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion]
 
-[HKEY_CLASSES_ROOT\\txtfile\\shell\\open]
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer]
+"SmartScreenEnabled"="Warn"
 
-[HKEY_CLASSES_ROOT\\txtfile\\shell\\open\\command]
-@="%SystemRoot%\\\\system32\\\\NOTEPAD.EXE %1"
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall]
+
+; ── Authentication / credential providers ──
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\Credential Providers]
+
+; ── Windows Update ──
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update]
+
+; ── Defender / security ──
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Real-Time Protection]
+"DisableRealtimeMonitoring"=dword:00000000
+"DisableBehaviorMonitoring"=dword:00000000
+"DisableOnAccessProtection"=dword:00000000
+"DisableScanOnRealtimeEnable"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Features]
+"TamperProtection"=dword:00000005
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Extensions]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Processes]
+
+; ── Edge ──
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Edge]
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\EdgeUpdate]
+
+; ── .NET / CLR ──
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\.NETFramework]
+
+; ── SYSTEM hive ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control]
+
+; ── LSA / credential security
+; Common targets: Pass-the-Hash mitigations, RunAsPPL, NTLM restrictions ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa]
+"RunAsPPL"=dword:00000002
+"LimitBlankPasswordUse"=dword:00000001
+"NoLMHash"=dword:00000001
+"LmCompatibilityLevel"=dword:00000003
+"RestrictAnonymous"=dword:00000001
+"RestrictAnonymousSAM"=dword:00000001
+"DisableDomainCreds"=dword:00000000
+"EveryoneIncludesAnonymous"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\MSV1_0]
+"NTLMMinClientSec"=dword:20080030
+"NTLMMinServerSec"=dword:20080030
+
+; ── WDigest — disable plaintext credential caching in memory ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest]
+"UseLogonCredential"=dword:00000000
+
+; ── Virtualization-Based Security / Credential Guard / HVCI ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard]
+"EnableVirtualizationBasedSecurity"=dword:00000001
+"RequirePlatformSecurityFeatures"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity]
+"Enabled"=dword:00000001
+"WasEnabledBy"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\CredentialGuard]
+"Enabled"=dword:00000001
+"WasEnabledBy"=dword:00000002
+
+; ── UAC (configured directly, not via Policies path) ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel]
+"DisableExceptionChainValidation"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management]
+"ClearPageFileAtShutdown"=dword:00000000
+"FeatureSettingsOverride"=dword:00000000
+"FeatureSettingsOverrideMask"=dword:00000000
+
+; ── Terminal Server / RDP ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server]
+"fDenyTSConnections"=dword:00000001
+"fSingleSessionPerUser"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp]
+"UserAuthentication"=dword:00000001
+"MinEncryptionLevel"=dword:00000003
+
+; ── Power ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Power]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes]
+
+; ── Services ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services]
+
+; SMB server (LanmanServer) — common: disable SMBv1, enforce signing ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters]
+"SMB1"=dword:00000000
+"SMB2"=dword:00000001
+"RequireSecuritySignature"=dword:00000000
+"EnableSecuritySignature"=dword:00000001
+
+; SMB client (LanmanWorkstation) ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters]
+"RequireSecuritySignature"=dword:00000000
+"EnableSecuritySignature"=dword:00000001
+
+; WinRM ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\WinRM]
+
+; TCP/IP ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"DisableIPSourceRouting"=dword:00000002
+"EnableICMPRedirect"=dword:00000000
+"TcpMaxDataRetransmissions"=dword:00000003
+"PerformRouterDiscovery"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters]
+"DisableIPSourceRouting"=dword:00000002
+
+; ── Event Log ──
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\EventLog]
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security]
+"MaxSize"=dword:00400000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\System]
+"MaxSize"=dword:00400000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application]
+"MaxSize"=dword:00400000
+
+; ─────────────────────────────────────────────────────────────────────────────
+; HKEY_CURRENT_USER  (per-user context — scripts targeting this hive
+;  should run as the user or use HKU\%SID% in SYSTEM context)
+; ─────────────────────────────────────────────────────────────────────────────
 
 [HKEY_CURRENT_USER]
 
@@ -56,9 +245,9 @@ export const SAMPLE_REG_FILE = `Windows Registry Editor Version 5.00
 
 [HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion]
 
+; ── Explorer / shell ──
+
 [HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer]
-"ShellState"=hex:24,00,00,00,33,28,00,00,00,00,00,00,00,00,00,00
-"Link"=hex:1b,00,00,00
 
 [HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced]
 "Hidden"=dword:00000002
@@ -66,10 +255,14 @@ export const SAMPLE_REG_FILE = `Windows Registry Editor Version 5.00
 "ShowSuperHidden"=dword:00000000
 "LaunchTO"=dword:00000001
 "TaskbarAl"=dword:00000001
-"TaskbarMn"=dword:00000001
 "TaskbarDa"=dword:00000001
-"TaskbarSi"=dword:00000001
 "ShowCopilotButton"=dword:00000001
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers]
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\AutoplayHandlers\\UserChosenExecuteHandlers]
+
+; ── Personalisation / themes ──
 
 [HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes]
 
@@ -78,185 +271,60 @@ export const SAMPLE_REG_FILE = `Windows Registry Editor Version 5.00
 "SystemUsesLightTheme"=dword:00000001
 "EnableTransparency"=dword:00000001
 
+; ── Startup ──
+
 [HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run]
-"OneDrive"="C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\OneDrive.exe /background"
-"SecurityHealth"="%ProgramFiles%\\\\Windows Defender\\\\MSASCuiL.exe"
 
-[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies]
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce]
 
-[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer]
-"NoDriveTypeAutoRun"=dword:000000ff
+; ── Internet Settings (proxy, zones, TLS) — frequently cited in fixes ──
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings]
+"ProxyEnable"=dword:00000000
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Zones]
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ZoneMap]
+
+; ── Search / Recall / Copilot feature toggles ──
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Search]
+
+; ── Office ──
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Office]
+
+; ── Edge (user-level) ──
+
+[HKEY_CURRENT_USER\\Software\\Microsoft\\Edge]
+
+; ── Console / Terminal ──
 
 [HKEY_CURRENT_USER\\Console]
 "HistoryBufferSize"=dword:00000032
-"NumberOfHistoryBuffers"=dword:00000004
-"ScreenBufferSize"=dword:23290078
-"WindowSize"=dword:001e0078
 "QuickEdit"=dword:00000001
 "InsertMode"=dword:00000001
 "FaceName"="Cascadia Mono"
-"FontSize"=dword:00120000
-"FontWeight"=dword:00000190
+
+; ── Environment ──
 
 [HKEY_CURRENT_USER\\Environment]
-"TEMP"=hex(2):25,00,55,00,53,00,45,00,52,00,50,00,52,00,4f,00,46,00,49,00,4c,00,45,00,25,00,5c,00,41,00,70,00,70,00,44,00,61,00,74,00,61,00,5c,00,4c,00,6f,00,63,00,61,00,6c,00,5c,00,54,00,65,00,6d,00,70,00,00,00
-"TMP"=hex(2):25,00,55,00,53,00,45,00,52,00,50,00,52,00,4f,00,46,00,49,00,4c,00,45,00,25,00,5c,00,41,00,70,00,70,00,44,00,61,00,74,00,61,00,5c,00,4c,00,6f,00,63,00,61,00,6c,00,5c,00,54,00,65,00,6d,00,70,00,00,00
-"Path"=hex(2):25,00,55,00,53,00,45,00,52,00,50,00,52,00,4f,00,46,00,49,00,4c,00,45,00,25,00,5c,00,41,00,70,00,70,00,44,00,61,00,74,00,61,00,5c,00,4c,00,6f,00,63,00,61,00,6c,00,5c,00,4d,00,69,00,63,00,72,00,6f,00,73,00,6f,00,66,00,74,00,5c,00,57,00,69,00,6e,00,64,00,6f,00,77,00,73,00,41,00,70,00,70,00,73,00,00,00
 
-[HKEY_CURRENT_USER\\AppEvents]
-
-[HKEY_CURRENT_USER\\AppEvents\\Schemes]
-@=".Default"
-
-[HKEY_CURRENT_USER\\AppEvents\\Schemes\\Apps]
-
-[HKEY_LOCAL_MACHINE]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion]
-"ProgramFilesDir"="C:\\\\Program Files"
-"CommonFilesDir"="C:\\\\Program Files\\\\Common Files"
-"ProgramFilesDir (x86)"="C:\\\\Program Files (x86)"
-"ProgramW6432Dir"="C:\\\\Program Files"
-"CommonW6432Dir"="C:\\\\Program Files\\\\Common Files"
-"DevicePath"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,5c,00,69,00,6e,00,66,00,00,00
-"MediaPathUnexpanded"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,5c,00,4d,00,65,00,64,00,69,00,61,00,00,00
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run]
-"SecurityHealth"="%ProgramFiles%\\\\Windows Defender\\\\MSASCuiL.exe"
-"iTunesHelper"="C:\\\\Program Files\\\\iTunes\\\\iTunesHelper.exe"
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System]
-"EnableLUA"=dword:00000001
-"ConsentPromptBehaviorAdmin"=dword:00000005
-"ConsentPromptBehaviorUser"=dword:00000003
-"PromptOnSecureDesktop"=dword:00000001
-"EnableInstallerDetection"=dword:00000001
-"ValidateAdminCodeSignatures"=dword:00000000
-"EnableSecureUIAPaths"=dword:00000001
-"FilterAdministratorToken"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer]
-"SmartScreenEnabled"="Warn"
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion]
-"ProductName"="Windows 11 Pro"
-"DisplayVersion"="23H2"
-"CurrentBuildNumber"="22631"
-"EditionID"="Professional"
-"InstallationType"="Client"
-"RegisteredOrganization"=""
-"RegisteredOwner"="User"
-"CurrentBuild"="22631"
-"BuildLab"="22631.ni_release.230913-1631"
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Real-Time Protection]
-"DisableRealtimeMonitoring"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU]
-"NoAutoUpdate"=dword:00000000
-"AUOptions"=dword:00000003
-
-[HKEY_LOCAL_MACHINE\\SYSTEM]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management]
-"ClearPageFileAtShutdown"=dword:00000000
-"PagingFiles"=hex(7):63,00,3a,00,5c,00,70,00,61,00,67,00,65,00,66,00,69,00,6c,00,65,00,2e,00,73,00,79,00,73,00,00,00,00,00
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server]
-"fDenyTSConnections"=dword:00000001
-"fSingleSessionPerUser"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters]
-"SMB1"=dword:00000000
-"SMB2"=dword:00000001
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip]
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
-"Hostname"="DESKTOP-WIN11"
-"Domain"=""
-"SearchList"=""
-
-[HKEY_LOCAL_MACHINE\\HARDWARE]
-
-[HKEY_LOCAL_MACHINE\\HARDWARE\\DESCRIPTION]
-
-[HKEY_LOCAL_MACHINE\\HARDWARE\\DESCRIPTION\\System]
-"SystemBiosVersion"=hex(7):44,00,45,00,4c,00,4c,00,20,00,2d,00,20,00,31,00,00,00,00,00
-
-[HKEY_LOCAL_MACHINE\\HARDWARE\\DESCRIPTION\\System\\CentralProcessor]
-
-[HKEY_LOCAL_MACHINE\\HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0]
-"ProcessorNameString"="13th Gen Intel(R) Core(TM) i7-13700K"
-"~MHz"=dword:00001450
-"VendorIdentifier"="GenuineIntel"
-"Identifier"="Intel64 Family 6 Model 183 Stepping 1"
+; ─────────────────────────────────────────────────────────────────────────────
+; HKEY_USERS  (used when targeting per-user keys from SYSTEM context)
+; ─────────────────────────────────────────────────────────────────────────────
 
 [HKEY_USERS]
 
-[HKEY_USERS\\.DEFAULT]
+; ─────────────────────────────────────────────────────────────────────────────
+; HKEY_CLASSES_ROOT  (structural stub only)
+; ─────────────────────────────────────────────────────────────────────────────
 
-[HKEY_USERS\\.DEFAULT\\Software]
+[HKEY_CLASSES_ROOT]
 
-[HKEY_USERS\\.DEFAULT\\Software\\Microsoft]
-
-[HKEY_USERS\\.DEFAULT\\Software\\Microsoft\\Windows]
-
-[HKEY_USERS\\.DEFAULT\\Software\\Microsoft\\Windows\\CurrentVersion]
-
-[HKEY_USERS\\.DEFAULT\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer]
-
-[HKEY_USERS\\.DEFAULT\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced]
-"Hidden"=dword:00000002
-"ShowSuperHidden"=dword:00000000
+; ─────────────────────────────────────────────────────────────────────────────
+; HKEY_CURRENT_CONFIG  (structural stub only)
+; ─────────────────────────────────────────────────────────────────────────────
 
 [HKEY_CURRENT_CONFIG]
-
-[HKEY_CURRENT_CONFIG\\Software]
-
-[HKEY_CURRENT_CONFIG\\Software\\Fonts]
-"FIXEDFON.FON"="vgafix.fon"
-"OEMFONT.FON"="vga850.fon"
-
-[HKEY_CURRENT_CONFIG\\System]
-
-[HKEY_CURRENT_CONFIG\\System\\CurrentControlSet]
-
-[HKEY_CURRENT_CONFIG\\System\\CurrentControlSet\\Control]
-
-[HKEY_CURRENT_CONFIG\\System\\CurrentControlSet\\Control\\Print]
-
-[HKEY_CURRENT_CONFIG\\System\\CurrentControlSet\\Control\\Print\\Printers]
 `;

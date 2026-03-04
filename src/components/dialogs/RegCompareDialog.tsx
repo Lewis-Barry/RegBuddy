@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseRegFile } from '../../registry/parser';
 import { diffRegTrees, RegDiffEntry, RegDiffType } from '../../registry/compare';
 import {
@@ -67,9 +67,7 @@ function diffRowClass(type: RegDiffType): string {
   }
 }
 
-function truncate(s: string, max = 60): string {
-  return s.length > max ? s.slice(0, max) + '…' : s;
-}
+
 
 // ── File loader card ──────────────────────────────────────────────────────────
 
@@ -154,7 +152,7 @@ const DiffRow: React.FC<{ entry: RegDiffEntry }> = ({ entry: e }) => {
         <div className="cmp-diff-data-row add">
           <span className="cmp-diff-data-label">Value</span>
           <span className="cmp-diff-type-pill">{e.primaryType}</span>
-          <span className="cmp-diff-data">{truncate(e.primaryData ?? '')}</span>
+          <span className="cmp-diff-data">{e.primaryData ?? ''}</span>
         </div>
       )}
 
@@ -162,7 +160,7 @@ const DiffRow: React.FC<{ entry: RegDiffEntry }> = ({ entry: e }) => {
         <div className="cmp-diff-data-row delete">
           <span className="cmp-diff-data-label">Was</span>
           <span className="cmp-diff-type-pill">{e.secondaryType}</span>
-          <span className="cmp-diff-data">{truncate(e.secondaryData ?? '')}</span>
+          <span className="cmp-diff-data">{e.secondaryData ?? ''}</span>
         </div>
       )}
 
@@ -171,12 +169,12 @@ const DiffRow: React.FC<{ entry: RegDiffEntry }> = ({ entry: e }) => {
           <div className="cmp-diff-data-row add">
             <span className="cmp-diff-data-label">Primary</span>
             <span className="cmp-diff-type-pill">{e.primaryType}</span>
-            <span className="cmp-diff-data">{truncate(e.primaryData ?? '')}</span>
+            <span className="cmp-diff-data">{e.primaryData ?? ''}</span>
           </div>
           <div className="cmp-diff-data-row delete">
             <span className="cmp-diff-data-label">Secondary</span>
             <span className="cmp-diff-type-pill secondary">{e.secondaryType}</span>
-            <span className="cmp-diff-data old">{truncate(e.secondaryData ?? '')}</span>
+            <span className="cmp-diff-data old">{e.secondaryData ?? ''}</span>
           </div>
         </>
       )}
@@ -245,6 +243,34 @@ export const RegCompareDialog: React.FC<RegCompareDialogProps> = ({ onBack }) =>
   const [scriptPane, setScriptPane] = useState<ScriptPane>('remediation');
   const [copied, setCopied]         = useState<ScriptPane | null>(null);
   const [profileName, setProfileName] = useState('RestoreBaseline');
+
+  // Resizable left panel
+  const [leftWidth, setLeftWidth] = useState(300);
+  const dragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+
+  const handleSplitterMouseDown = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = leftWidth;
+    e.preventDefault();
+  }, [leftWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = e.clientX - dragStartX.current;
+      setLeftWidth(Math.max(220, Math.min(560, dragStartWidth.current + delta)));
+    };
+    const onMouseUp = () => { dragging.current = false; };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
 
   // Parse both trees
   const primaryTree = useMemo(
@@ -356,7 +382,7 @@ export const RegCompareDialog: React.FC<RegCompareDialogProps> = ({ onBack }) =>
       {/* ── Body ── */}
       <div className="confirmPage-body">
         {/* ── Left panel: file selectors + config ── */}
-        <div className="confirmPage-changes cmp-left">
+        <div className="confirmPage-changes cmp-left" style={{ width: leftWidth, minWidth: leftWidth, maxWidth: leftWidth }}>
           <FileCard
             role="primary"
             fileName={primaryName}
@@ -397,6 +423,9 @@ export const RegCompareDialog: React.FC<RegCompareDialogProps> = ({ onBack }) =>
             </div>
           )}
         </div>
+
+        {/* ── Splitter ── */}
+        <div className="cmp-splitter" onMouseDown={handleSplitterMouseDown} />
 
         {/* ── Right panel: diff or script ── */}
         <div className="confirmPage-script">

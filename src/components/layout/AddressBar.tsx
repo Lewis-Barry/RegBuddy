@@ -1,17 +1,69 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
+import { ROOT_HIVES } from '../../registry/types';
+
+/** Expand common hive abbreviations and normalise separators. */
+function normalizePath(raw: string): string {
+  let p = raw.replace(/\//g, '\\').trim();
+  // Strip leading "Computer\" if pasted from the address bar display
+  if (/^computer\\/i.test(p)) p = p.slice('Computer\\'.length);
+  const abbr: Record<string, string> = {
+    HKLM: 'HKEY_LOCAL_MACHINE',
+    HKCU: 'HKEY_CURRENT_USER',
+    HKCR: 'HKEY_CLASSES_ROOT',
+    HKU: 'HKEY_USERS',
+    HKCC: 'HKEY_CURRENT_CONFIG',
+  };
+  for (const [short, full] of Object.entries(abbr)) {
+    if (p.toUpperCase().startsWith(short + '\\') || p.toUpperCase() === short) {
+      p = full + p.slice(short.length);
+      break;
+    }
+  }
+  // Uppercase the hive root segment to match the tree's casing
+  const slash = p.indexOf('\\');
+  const hive = slash === -1 ? p.toUpperCase() : p.slice(0, slash).toUpperCase();
+  const rest = slash === -1 ? '' : p.slice(slash);
+  return hive + rest;
+}
+
+function isValidHive(path: string): boolean {
+  const hive = path.split('\\')[0].toUpperCase();
+  return (ROOT_HIVES as readonly string[]).includes(hive);
+}
 
 export const AddressBar: React.FC = () => {
   const selectedPath = useRegBuddyStore((s) => s.selectedPath);
-  const expandTo = useRegBuddyStore((s) => s.expandTo);
-  const selectKey = useRegBuddyStore((s) => s.selectKey);
+  const mergedTree   = useRegBuddyStore((s) => s.mergedTree);
+  const expandTo     = useRegBuddyStore((s) => s.expandTo);
+  const selectKey    = useRegBuddyStore((s) => s.selectKey);
+  const createAndNavigateTo = useRegBuddyStore((s) => s.createAndNavigateTo);
+
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [notFound, setNotFound]   = useState(false);
+  const [copied, setCopied]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /** Walk the merged tree to check if a path node exists */
+  const pathExists = useCallback(
+    (path: string) => {
+      // 'Computer' is always the virtual root
+      if (path === 'Computer') return true;
+      let node = mergedTree;
+      for (const seg of path.split('\\')) {
+        const child = node.children.find((c) => c.name.toLowerCase() === seg.toLowerCase());
+        if (!child) return false;
+        node = child;
+      }
+      return true;
+    },
+    [mergedTree],
+  );
 
   const handleClick = useCallback(() => {
     setEditValue(selectedPath);
+    setNotFound(false);
     setEditing(true);
     setTimeout(() => inputRef.current?.select(), 0);
   }, [selectedPath]);
@@ -19,17 +71,43 @@ export const AddressBar: React.FC = () => {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
-        const path = editValue.trim();
-        if (path) {
+        const raw = editValue.trim();
+        if (!raw) { setEditing(false); return; }
+        const path = normalizePath(raw);
+
+        if (notFound) {
+          // Second Enter — confirmed, create the path
+          createAndNavigateTo(path);
+          setEditing(false);
+          setNotFound(false);
+          return;
+        }
+
+        if (pathExists(path)) {
           expandTo(path);
           selectKey(path);
+          setEditing(false);
+        } else if (!isValidHive(path)) {
+          // Not a valid hive at all — just close
+          setEditing(false);
+        } else {
+          // First Enter on an unknown path — prompt to create
+          setEditValue(path); // show normalised form
+          setNotFound(true);
+          setTimeout(() => inputRef.current?.select(), 0);
         }
-        setEditing(false);
       } else if (e.key === 'Escape') {
-        setEditing(false);
+        if (notFound) {
+          setNotFound(false);
+        } else {
+          setEditing(false);
+        }
+      } else {
+        // Any other keystroke clears the not-found state so the hint updates
+        setNotFound(false);
       }
     },
-    [editValue, expandTo, selectKey],
+    [editValue, notFound, pathExists, expandTo, selectKey, createAndNavigateTo],
   );
 
   const handleCopy = useCallback(async () => {
@@ -67,15 +145,34 @@ export const AddressBar: React.FC = () => {
       {editing ? (
         <input
           ref={inputRef}
-          className="addressBar-input"
+          className={`addressBar-input${notFound ? ' addressBar-input--notfound' : ''}`}
           value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
+          onChange={(e) => { setEditValue(e.target.value); setNotFound(false); }}
           onKeyDown={handleKeyDown}
-          onBlur={() => setEditing(false)}
+          onBlur={() => { setEditing(false); setNotFound(false); }}
         />
       ) : (
         <div className="addressBar-path" onClick={handleClick} title={selectedPath}>
           {selectedPath}
+        </div>
+      )}
+
+      {notFound && (
+        <div className="addressBar-hint">
+          <span>Path not found.</span>
+          <button
+            className="addressBar-hint-create"
+            onMouseDown={(e) => {
+              // Prevent the input from losing focus before we handle the click
+              e.preventDefault();
+              createAndNavigateTo(normalizePath(editValue.trim()));
+              setEditing(false);
+              setNotFound(false);
+            }}
+          >
+            Create
+          </button>
+          <span className="addressBar-hint-shortcut">or press Enter</span>
         </div>
       )}
 

@@ -172,10 +172,12 @@ export interface RegBuddyState {
   editingValueName: string | null;
 
   // Actions
-  loadBaseline: (regContent?: string) => void;
+  loadBaseline: () => void;
   selectKey: (path: string) => void;
   toggleExpand: (path: string) => void;
   expandTo: (path: string) => void;
+  /** Navigate to path, creating any missing intermediate keys as add-key changes */
+  createAndNavigateTo: (path: string) => void;
 
   // Change actions
   addKeyChange: (path: string) => void;
@@ -221,8 +223,8 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
     editingKeyPath: null,
     editingValueName: null,
 
-    loadBaseline: (regContent?: string) => {
-      const baseline = parseRegFile(regContent ?? SAMPLE_REG_FILE);
+    loadBaseline: () => {
+      const baseline = parseRegFile(SAMPLE_REG_FILE);
       set({
         baseline,
         changes: [],
@@ -250,6 +252,39 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
           next.add(parts.slice(0, i).join('\\'));
         }
         return { expandedNodes: next, selectedPath: path };
+      }),
+
+    createAndNavigateTo: (path) =>
+      set((state) => {
+        const parts = path.split('\\');
+        const newChanges: RegistryChange[] = [];
+        // Add an add-key change for every segment that doesn't exist yet
+        for (let i = 1; i <= parts.length; i++) {
+          const segPath = parts.slice(0, i).join('\\');
+          const existsInMerged = !!findKey(state.mergedTree, segPath);
+          const alreadyPending = state.changes.some(
+            (c) => c.type === 'add-key' && c.path === segPath,
+          );
+          if (!existsInMerged && !alreadyPending) {
+            newChanges.push({
+              id: genId(),
+              type: 'add-key',
+              path: segPath,
+              timestamp: Date.now(),
+            });
+          }
+        }
+        const changes = [...state.changes, ...newChanges];
+        const next = new Set(state.expandedNodes);
+        for (let i = 1; i <= parts.length; i++) {
+          next.add(parts.slice(0, i).join('\\'));
+        }
+        return {
+          changes,
+          mergedTree: applyChanges(state.baseline, changes),
+          expandedNodes: next,
+          selectedPath: path,
+        };
       }),
 
     addKeyChange: (path) =>

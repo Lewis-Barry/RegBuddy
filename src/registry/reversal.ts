@@ -34,13 +34,16 @@ export interface ReversalResult {
  * to undo every change recorded in `changes`.
  *
  * Rules:
- *   add-key      → delete-key  (remove the key that was added)
+ *   add-key      → SKIPPED — keys are never deleted in reversal mode (safety constraint)
  *   delete-key   → add-key + restore values from baseline
  *   add-value    → delete-value
  *   delete-value → add-value with original data from baseline (warn if unknown)
  *   modify-value → modify-value with swapped data (restore original; warn if unknown)
  *   rename-key   → rename-key back to original name
  *   rename-value → rename-value back to original name
+ *
+ * NOTE: Keys are intentionally never deleted during reversal to avoid breaking
+ * critical system or application registry structures.
  */
 export function computeReversalChanges(
   changes: RegistryChange[],
@@ -52,14 +55,9 @@ export function computeReversalChanges(
 
   for (const c of changes) {
     switch (c.type) {
-      // ── add-key → delete the key that was added ──────────────────────────
+      // ── add-key → SKIP silently (keys are never deleted in reversal mode) ──
       case 'add-key': {
-        reversed.push({
-          id: revId(),
-          type: 'delete-key',
-          path: c.path,
-          timestamp: now,
-        });
+        // Intentional no-op: reversal never deletes keys (only values).
         break;
       }
 
