@@ -1761,3 +1761,226 @@
   color: var(--change-delete-text);
   text-decoration: line-through;
 }
+
+/* ── Welcome Modal ── */
+
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  backdrop-filter: blur(2px);
+}
+
+.welcome-modal {
+  background: var(--bg-dialog);
+  border-radius: 10px;
+  box-shadow: var(--shadow-dialog), 0 20px 60px rgba(0, 0, 0, 0.22);
+  width: 540px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  user-select: text;
+}
+
+/* Header */
+.welcome-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.welcome-logo {
+  width: 46px;
+  height: 46px;
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.welcome-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+
+.welcome-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Features */
+.welcome-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 28px 4px;
+}
+
+.welcome-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.welcome-feature:last-child {
+  border-bottom: none;
+}
+
+.welcome-feature-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.welcome-feature-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.welcome-feature-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Warning */
+.welcome-warning {
+  margin: 8px 28px 4px;
+  background: #fff0f0;
+  border: 1px solid #f0a0a0;
+  border-radius: 0;
+  padding: 12px 14px;
+}
+
+.welcome-warning-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #b00020;
+  margin-bottom: 7px;
+}
+
+.welcome-warning-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b00020;
+}
+
+.welcome-warning-text {
+  font-size: 11.5px;
+  color: #7a0015;
+  line-height: 1.55;
+  margin-bottom: 8px;
+}
+
+.welcome-warning-list {
+  font-size: 11.5px;
+  color: #7a0015;
+  line-height: 1.55;
+  padding-left: 18px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.welcome-warning-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #7a0015;
+}
+
+.welcome-warning-tools-label {
+  font-weight: 600;
+}
+
+.welcome-link {
+  color: var(--accent);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.welcome-link:hover {
+  text-decoration: underline;
+  color: var(--accent-hover);
+}
+
+/* Footer */
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px 20px;
+  gap: 12px;
+}
+
+.welcome-dont-show {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.welcome-dont-show input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.welcome-dismiss {
+  padding: 7px 22px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.welcome-dismiss:hover {
+  background: var(--bg-hover);
+}
+
+.welcome-dismiss.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.welcome-dismiss.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
