@@ -192,8 +192,9 @@ export function generateRemediationScript(
     blank();
   }
 
-  // Keys that must exist before setting values. New-Item -Force is idempotent
-  // and creates parents, so one line per deepest key covers everything.
+  // New-Item -Force is idempotent for registry keys: it creates missing parents
+  // and is a safe no-op on keys that already exist (it never wipes them). So one
+  // line per deepest touched key covers both new keys and parents of set values.
   const keysToCreate = minimalKeyPaths([
     ...addKeys.map((c) => c.path),
     ...setValues.map((c) => c.path),
