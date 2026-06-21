@@ -79,18 +79,6 @@ function minimalKeyPaths(paths: string[]): string[] {
     .sort();
 }
 
-/**
- * The opposite of minimalKeyPaths: keep the ancestor-most touched keys and drop
- * descendants. Used for backup — `reg export` of a key captures its whole
- * subtree, so exporting the top key covers everything beneath it.
- */
-function topLevelKeyPaths(paths: string[]): string[] {
-  const set = new Set(paths.map(cleanPath).filter(Boolean));
-  return [...set]
-    .filter((p) => ![...set].some((o) => o !== p && p.startsWith(o + '\\')))
-    .sort();
-}
-
 /** Suggest a profile name from the most-changed registry paths */
 export function suggestProfileName(changes: RegistryChange[]): string {
   if (changes.length === 0) return 'RegBuddy';
@@ -152,7 +140,15 @@ export function generateRemediationScript(
   // This is the reliable rollback: it captures the device's real prior state,
   // including data RegBuddy never modelled. Keys that don't exist yet simply
   // produce no backup (reg export is best-effort here).
-  const backupKeys = topLevelKeyPaths(changes.map((c) => c.path));
+  // Back up only the keys we actually touch (deduped) — NOT their ancestors.
+  // `reg export <key>` already captures that key's subtree; collapsing to
+  // ancestors would export huge unrelated trees. add-key paths are new, so
+  // there's nothing to back up for them.
+  const backupKeys = [
+    ...new Set(
+      changes.filter((c) => c.type !== 'add-key').map((c) => cleanPath(c.path)).filter(Boolean),
+    ),
+  ].sort();
   if (includeBackup && backupKeys.length > 0) {
     line(`# --- Backup affected keys (rollback safety net) ---`);
     line(`$ts = Get-Date -Format 'yyyyMMdd-HHmmss'`);
@@ -166,7 +162,7 @@ export function generateRemediationScript(
     line(`    New-Item -Path $backupDir -ItemType Directory -Force | Out-Null`);
     line(`}`);
     line(`$backupFile = Join-Path $backupDir 'backup.reg'`);
-    line(`# Export each top-level key to a temp file, then merge into one backup.reg`);
+    line(`# Export each touched key to a temp file, then merge into one backup.reg`);
     line(`# (reg export can't append; drop the repeated header on all but the first).`);
     line(`$keys = @(`);
     backupKeys.forEach((k, i) => {

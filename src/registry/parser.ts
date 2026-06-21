@@ -28,6 +28,17 @@ export async function readRegFile(file: Blob): Promise<string> {
   const buf = new Uint8Array(await file.arrayBuffer());
   if (buf[0] === 0xff && buf[1] === 0xfe) return decode(buf, 'utf-16le');
   if (buf[0] === 0xfe && buf[1] === 0xff) return decode(buf, 'utf-16be');
+  // No BOM: PowerShell's `Unicode` encoding doesn't always emit one. Sniff for
+  // UTF-16 by its null bytes (UTF-8 text never contains 0x00) and infer endianness
+  // from which half of each code unit is zero in the ASCII-heavy header.
+  const n = Math.min(buf.length, 256);
+  let evenNul = 0, oddNul = 0;
+  for (let i = 0; i + 1 < n; i += 2) {
+    if (buf[i] === 0) evenNul++;
+    if (buf[i + 1] === 0) oddNul++;
+  }
+  if (oddNul > n / 8) return decode(buf, 'utf-16le');
+  if (evenNul > n / 8) return decode(buf, 'utf-16be');
   return decode(buf, 'utf-8');
 }
 
