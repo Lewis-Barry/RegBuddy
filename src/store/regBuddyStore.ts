@@ -5,16 +5,14 @@ import {
   RegistryChange,
   ChangeType,
   RegistryValueType,
+  findKey,
 } from '../registry/types';
 import { parseRegFile } from '../registry/parser';
 import { SAMPLE_REG_FILE } from '../registry/sampleBaseline';
 
 // ── Helpers ──
 
-let nextId = 1;
-function genId(): string {
-  return `change-${nextId++}`;
-}
+const genId = () => crypto.randomUUID();
 
 function cloneTree(node: RegistryKey): RegistryKey {
   return {
@@ -22,16 +20,6 @@ function cloneTree(node: RegistryKey): RegistryKey {
     values: node.values.map((v) => ({ ...v })),
     children: node.children.map(cloneTree),
   };
-}
-
-/** Find a key in the tree by full path */
-function findKey(root: RegistryKey, path: string): RegistryKey | null {
-  if (root.path === path) return root;
-  for (const child of root.children) {
-    const found = findKey(child, path);
-    if (found) return found;
-  }
-  return null;
 }
 
 /** Ensure a key exists at path, creating intermediate keys as needed */
@@ -204,7 +192,6 @@ export interface RegBuddyState {
   renameValueChange: (path: string, oldName: string, newName: string) => void;
 
   // Helpers
-  getChangeForKey: (path: string) => RegistryChange | undefined;
   getChangeForValue: (path: string, valueName: string) => RegistryChange | undefined;
   isKeyChanged: (path: string) => ChangeType | null;
   /** Returns true if any ancestor key of `path` has a delete-key change */
@@ -651,17 +638,6 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
           mergedTree: applyChanges(state.baseline, changes),
         };
       }),
-
-    getChangeForKey: (path) => {
-      return get().changes.find(
-        (c) => (c.path === path && (c.type === 'add-key' || c.type === 'delete-key')) ||
-          (c.type === 'rename-key' && (() => {
-            const parentPath = c.path.substring(0, c.path.lastIndexOf('\\'));
-            const newPath = parentPath ? parentPath + '\\' + (c.newName ?? '') : (c.newName ?? '');
-            return newPath === path || c.path === path;
-          })()),
-      );
-    },
 
     getChangeForValue: (path, valueName) => {
       return get().changes.find(

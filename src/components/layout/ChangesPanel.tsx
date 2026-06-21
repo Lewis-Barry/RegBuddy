@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
 
 interface ChangesPanelProps {
@@ -10,6 +10,34 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({ onGetScripts }) => {
   const removeChange = useRegBuddyStore((s) => s.removeChange);
   const clearAllChanges = useRegBuddyStore((s) => s.clearAllChanges);
   const expandTo = useRegBuddyStore((s) => s.expandTo);
+
+  const [height, setHeight] = useState(200);
+  const dragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    dragging.current = true;
+    startY.current = e.clientY;
+    startHeight.current = height;
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      // Drag up grows the panel (eats into the main area above).
+      const next = startHeight.current + (startY.current - e.clientY);
+      setHeight(Math.max(80, Math.min(window.innerHeight - 200, next)));
+    };
+    const onUp = () => { dragging.current = false; };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   if (changes.length === 0) return null;
 
@@ -30,7 +58,8 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({ onGetScripts }) => {
   };
 
   return (
-    <div className="changesPanel">
+    <div className="changesPanel" style={{ height }}>
+      <div className="changesPanel-resize" onMouseDown={handleMouseDown} />
       <div className="changesPanel-header">
         <span>
           Pending Changes ({changes.length})
@@ -40,6 +69,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({ onGetScripts }) => {
           <button className="confirmPage-triggerBtn" onClick={onGetScripts}>Get Scripts</button>
         </div>
       </div>
+      <div className="changesPanel-body">
       {changes.map((c) => (
         <div
           key={c.id}
@@ -64,6 +94,7 @@ export const ChangesPanel: React.FC<ChangesPanelProps> = ({ onGetScripts }) => {
           </button>
         </div>
       ))}
+      </div>
     </div>
   );
 };

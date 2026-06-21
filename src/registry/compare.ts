@@ -1,4 +1,4 @@
-import { RegistryKey, RegistryChange, RegistryValueType } from './types';
+import { RegistryKey, RegistryChange, RegistryValueType, findKey } from './types';
 
 // ── Diff entry types ──────────────────────────────────────────────────────────
 
@@ -45,19 +45,7 @@ export interface RegDiffResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-let _cmpId = 1;
-function cmpId(): string {
-  return `cmp-${_cmpId++}`;
-}
-
-function findKey(root: RegistryKey, path: string): RegistryKey | null {
-  if (root.path === path) return root;
-  for (const child of root.children) {
-    const found = findKey(child, path);
-    if (found) return found;
-  }
-  return null;
-}
+const cmpId = () => crypto.randomUUID();
 
 /** Collect every non-Computer / non-hive-root key path in a tree */
 function allKeyPaths(node: RegistryKey, out: Set<string>) {

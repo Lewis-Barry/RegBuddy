@@ -9,15 +9,19 @@ import { ValuePanel } from './components/values/ValuePanel';
 import { ExportScriptsDialog } from './components/dialogs/ExportScriptsDialog';
 import { RegCompareDialog } from './components/dialogs/RegCompareDialog';
 import { WelcomeModal } from './components/dialogs/WelcomeModal';
+import { AboutModal } from './components/dialogs/AboutModal';
 
 const WELCOME_KEY = 'regbuddy-welcome-seen';
 
 const App: React.FC = () => {
   const [showExport, setShowExport]   = useState(false);
+  const [exportRestore, setExportRestore] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
+  const [showAbout, setShowAbout]     = useState(false);
 
-  const handleGetScripts  = () => { setShowCompare(false); setShowExport(true); };
+  const handleGetScripts  = () => { setShowCompare(false); setExportRestore(false); setShowExport(true); };
+  const handleRestore     = () => { setShowCompare(false); setExportRestore(true);  setShowExport(true); };
   const handleCompare     = () => { setShowExport(false);  setShowCompare(true); };
   const handleWelcomeDismiss = (dontShowAgain: boolean) => {
     if (dontShowAgain) localStorage.setItem(WELCOME_KEY, '1');
@@ -26,7 +30,7 @@ const App: React.FC = () => {
 
   return (
     <div className="regedit" style={{ position: 'relative' }}>
-      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} />
+      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} onRestore={handleRestore} onAbout={() => setShowAbout(true)} onShowWelcome={() => setShowWelcome(true)} />
       <AddressBar />
       <SplitPane
         left={<TreePanel />}
@@ -35,9 +39,10 @@ const App: React.FC = () => {
       />
       <ChangesPanel onGetScripts={handleGetScripts} />
       <StatusBar />
-      {showExport  && <ExportScriptsDialog onBack={() => setShowExport(false)} />}
+      {showExport  && <ExportScriptsDialog onBack={() => setShowExport(false)} initialRestore={exportRestore} />}
       {showCompare && <RegCompareDialog    onBack={() => setShowCompare(false)} />}
       {showWelcome && <WelcomeModal onDismiss={handleWelcomeDismiss} />}
+      {showAbout   && <AboutModal onClose={() => setShowAbout(false)} />}
     </div>
   );
 };

@@ -5,9 +5,12 @@ import { RegistryValueType } from '../../registry/types';
 interface MenuBarProps {
   onGetScripts?: () => void;
   onCompare?: () => void;
+  onRestore?: () => void;
+  onAbout?: () => void;
+  onShowWelcome?: () => void;
 }
 
-export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => {
+export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare, onRestore, onAbout, onShowWelcome }) => {
   const loadBaseline = useRegBuddyStore((s) => s.loadBaseline);
   const changes = useRegBuddyStore((s) => s.changes);
   const clearAllChanges = useRegBuddyStore((s) => s.clearAllChanges);
@@ -133,7 +136,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => 
       { label: '(No favorites)', disabled: true },
     ],
     Help: [
-      { label: 'About RegBuddy', onClick: () => window.alert('RegBuddy V1\nRegistry Editor for Intune\n\nGenerate PowerShell scripts for Intune deployment.') },
+      { label: 'Show welcome screen', onClick: onShowWelcome },
+      { label: 'separator', separator: true },
+      { label: 'About RegBuddy', onClick: onAbout },
     ],
   };
 
@@ -161,6 +166,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare }) => 
           {name}
         </div>
       ))}
+      <button className="menuBar-restore" onClick={onRestore} title="Restore a device to a RegBuddy backup">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+          <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+        </svg>
+        Restore
+      </button>
       {openMenu && activeEl && (
         <>
           <div

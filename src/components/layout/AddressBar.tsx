@@ -5,6 +5,9 @@ import { ROOT_HIVES } from '../../registry/types';
 /** Expand common hive abbreviations and normalise separators. */
 function normalizePath(raw: string): string {
   let p = raw.replace(/\//g, '\\').trim();
+  // Collapse repeated separators and drop any trailing separator so the path
+  // splits into clean segments (no empty names).
+  p = p.replace(/\\{2,}/g, '\\').replace(/\\+$/, '');
   // Strip leading "Computer\" if pasted from the address bar display
   if (/^computer\\/i.test(p)) p = p.slice('Computer\\'.length);
   const abbr: Record<string, string> = {

@@ -75,26 +75,6 @@ function validateRegExpandSz(data: string): ValidationResult {
     };
   }
 
-  // Check that each %...% section contains a plausible variable name
-  const envVarPattern = /%([^%]*)%/g;
-  let match: RegExpExecArray | null;
-  while ((match = envVarPattern.exec(data)) !== null) {
-    const varName = match[1];
-    if (varName.length === 0) {
-      return {
-        valid: true,
-        warning: 'Empty environment variable reference "%%" detected.',
-      };
-    }
-    // Environment variable names should only contain alphanumeric and underscores (plus a few others)
-    if (!/^[A-Za-z_][A-Za-z0-9_()]*$/.test(varName)) {
-      return {
-        valid: true,
-        warning: `Unusual environment variable name "%${varName}%" — verify this is correct.`,
-      };
-    }
-  }
-
   return { valid: true };
 }
 

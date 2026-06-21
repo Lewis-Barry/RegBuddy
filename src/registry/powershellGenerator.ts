@@ -10,14 +10,20 @@ const HIVE_MAP: [string, string][] = [
   ['HKEY_CURRENT_CONFIG','HKCC:'],
 ];
 
+/** Collapse repeated separators and strip any trailing separator. */
+function cleanPath(p: string): string {
+  return p.replace(/\\{2,}/g, '\\').replace(/\\+$/, '');
+}
+
 function toPsPath(regPath: string): string {
+  const path = cleanPath(regPath);
   for (const [hive, alias] of HIVE_MAP) {
-    if (regPath === hive) return alias;
-    if (regPath.startsWith(hive + '\\')) {
-      return alias + '\\' + regPath.slice(hive.length + 1);
+    if (path === hive) return alias;
+    if (path.startsWith(hive + '\\')) {
+      return alias + '\\' + path.slice(hive.length + 1);
     }
   }
-  return regPath;
+  return path;
 }
 
 function psType(type: RegistryValueType): string {
@@ -39,10 +45,10 @@ function psData(type: RegistryValueType, data: string): string {
       return `'${data.replace(/'/g, "''")}'`;
 
     case 'REG_DWORD':
-      return `[uint32]0x${(data || '0').padStart(8, '0')}`;
+      return `([uint32]0x${(data || '0').padStart(8, '0')})`;
 
     case 'REG_QWORD':
-      return `[uint64]0x${(data || '0').padStart(16, '0')}`;
+      return `([uint64]0x${(data || '0').padStart(16, '0')})`;
 
     case 'REG_BINARY': {
       if (!data) return '@()';
@@ -65,6 +71,30 @@ function q(s: string) {
   return s.replace(/'/g, "''");
 }
 
+/**
+ * Reduce a list of key paths to the minimal set worth creating: strip trailing
+ * separators, dedupe, and drop any path that is an ancestor of another —
+ * `New-Item -Force` creates intermediate keys, so the deepest path covers them.
+ */
+function minimalKeyPaths(paths: string[]): string[] {
+  const set = new Set(paths.map(cleanPath).filter(Boolean));
+  return [...set]
+    .filter((p) => ![...set].some((o) => o !== p && o.startsWith(p + '\\')))
+    .sort();
+}
+
+/**
+ * The opposite of minimalKeyPaths: keep the ancestor-most touched keys and drop
+ * descendants. Used for backup — `reg export` of a key captures its whole
+ * subtree, so exporting the top key covers everything beneath it.
+ */
+function topLevelKeyPaths(paths: string[]): string[] {
+  const set = new Set(paths.map(cleanPath).filter(Boolean));
+  return [...set]
+    .filter((p) => ![...set].some((o) => o !== p && p.startsWith(o + '\\')))
+    .sort();
+}
+
 /** Suggest a profile name from the most-changed registry paths */
 export function suggestProfileName(changes: RegistryChange[]): string {
   if (changes.length === 0) return 'RegBuddy';
@@ -84,9 +114,14 @@ export function suggestProfileName(changes: RegistryChange[]): string {
 
 // ── Remediation Script Generator ──────────────────────────────────────────────
 
-export function generateRemediationScript(changes: RegistryChange[], profileName?: string): string {
+export function generateRemediationScript(
+  changes: RegistryChange[],
+  profileName?: string,
+  reversal = false,
+): string {
   const now = new Date().toISOString();
   const profile = profileName || 'RegBuddy';
+  const safeProfile = profile.replace(/[^\w.-]/g, '_') || 'RegBuddy';
 
   const addKeys   = changes.filter((c) => c.type === 'add-key');
   const setValues = changes.filter((c) => c.type === 'add-value' || c.type === 'modify-value');
@@ -101,27 +136,56 @@ export function generateRemediationScript(changes: RegistryChange[], profileName
   const blank = () => L.push('');
 
   line(`<#`);
-  line(`  RegBuddy Remediation Script`);
+  line(`  RegBuddy ${reversal ? 'Restore' : 'Remediation'} Script`);
   line(`  Generated: ${now}`);
   line(`  Profile: ${profile}`);
   line(`  Changes: ${changes.length}`);
+  if (reversal) line(`  Note: restores the affected keys to the uploaded backup snapshot and removes what was added.`);
+  line(`  Backup: every affected key is exported (BEFORE any change) to %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp>,`);
+  line(`          or %TEMP% if that isn't writable. The exact path is printed at runtime. Roll back with  reg import <file>.`);
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
-  line(`Set-StrictMode -Version Latest`);
   line(`$ErrorActionPreference = 'Stop'`);
   blank();
 
-  if (addKeys.length > 0) {
-    line(`# --- Add/Modify Keys ---`);
-    for (const c of addKeys) {
-      const psPath = toPsPath(c.path);
-      line(`# New key: ${c.path}`);
-      line(`if (-not (Test-Path '${q(psPath)}')) {`);
-      line(`    New-Item -Path '${q(psPath)}' -Force | Out-Null`);
-      line(`}`);
-      blank();
+  // --- Snapshot the live state of every touched key before writing anything.
+  // This is the reliable rollback: it captures the device's real prior state,
+  // including data RegBuddy never modelled. Keys that don't exist yet simply
+  // produce no backup (reg export is best-effort here).
+  const backupKeys = topLevelKeyPaths(changes.map((c) => c.path));
+  if (backupKeys.length > 0) {
+    line(`# --- Backup affected keys (rollback safety net) ---`);
+    line(`$ts = Get-Date -Format 'yyyyMMdd-HHmmss'`);
+    line(`# Prefer ProgramData (machine-wide, admin-retrievable). A standard-user run`);
+    line(`# may be denied there if the folder is SYSTEM-owned — fall back to TEMP.`);
+    line(`$backupDir = Join-Path $env:ProgramData "RegBuddy\\${safeProfile}-$ts"`);
+    line(`try {`);
+    line(`    New-Item -Path $backupDir -ItemType Directory -Force -ErrorAction Stop | Out-Null`);
+    line(`} catch {`);
+    line(`    $backupDir = Join-Path $env:TEMP "RegBuddy\\${safeProfile}-$ts"`);
+    line(`    New-Item -Path $backupDir -ItemType Directory -Force | Out-Null`);
+    line(`}`);
+    backupKeys.forEach((k, i) => {
+      line(`reg export "${k}" "$backupDir\\${String(i + 1).padStart(2, '0')}.reg" /y *> $null`);
+    });
+    line(`Write-Output "Backup saved to $backupDir"`);
+    blank();
+  }
+
+  // Keys that must exist before setting values. New-Item -Force is idempotent
+  // and creates parents, so one line per deepest key covers everything.
+  const keysToCreate = minimalKeyPaths([
+    ...addKeys.map((c) => c.path),
+    ...setValues.map((c) => c.path),
+  ]);
+
+  if (keysToCreate.length > 0) {
+    line(`# --- Create Keys ---`);
+    for (const path of keysToCreate) {
+      line(`New-Item -Path '${q(toPsPath(path))}' -Force | Out-Null`);
     }
+    blank();
   }
 
   if (setValues.length > 0) {
@@ -131,62 +195,46 @@ export function generateRemediationScript(changes: RegistryChange[], profileName
       const name   = c.valueName ?? '';
       const type   = c.valueType ?? 'REG_SZ';
       const data   = c.newData ?? '';
-      line(`# Set value: ${c.path} -> ${name || '(Default)'} (${type}) = ${data.substring(0, 60)}`);
-      // Ensure parent key exists
-      line(`if (-not (Test-Path '${q(psPath)}')) {`);
-      line(`    New-Item -Path '${q(psPath)}' -Force | Out-Null`);
-      line(`}`);
       if (name === '') {
         line(`Set-Item -LiteralPath '${q(psPath)}' -Value ${psData(type, data)} -Force`);
       } else {
         line(`Set-ItemProperty -Path '${q(psPath)}' -Name '${q(name)}' -Value ${psData(type, data)} -Type ${psType(type)} -Force`);
       }
-      blank();
     }
+    blank();
   }
 
   if (delValues.length > 0) {
     line(`# --- Delete Values ---`);
     for (const c of delValues) {
-      const psPath = toPsPath(c.path);
-      const name   = c.valueName ?? '';
-      line(`# Delete value: ${c.path} -> ${name || '(Default)'}`);
-      line(`Remove-ItemProperty -Path '${q(psPath)}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
-      blank();
+      const name = c.valueName ?? '';
+      line(`Remove-ItemProperty -Path '${q(toPsPath(c.path))}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
     }
+    blank();
   }
 
   if (delKeys.length > 0) {
     line(`# --- Delete Keys ---`);
     for (const c of delKeys) {
-      const psPath = toPsPath(c.path);
-      line(`# Delete key: ${c.path}`);
-      line(`Remove-Item -Path '${q(psPath)}' -Recurse -Force -ErrorAction SilentlyContinue`);
-      blank();
+      line(`Remove-Item -Path '${q(toPsPath(c.path))}' -Recurse -Force -ErrorAction SilentlyContinue`);
     }
+    blank();
   }
 
   if (renKeys.length > 0) {
     line(`# --- Rename Keys ---`);
     for (const c of renKeys) {
-      const psPath = toPsPath(c.path);
-      const newName = c.newName ?? '';
-      line(`# Rename key: ${c.path} -> ${newName}`);
-      line(`Rename-Item -Path '${q(psPath)}' -NewName '${q(newName)}' -Force`);
-      blank();
+      line(`Rename-Item -Path '${q(toPsPath(c.path))}' -NewName '${q(c.newName ?? '')}' -Force`);
     }
+    blank();
   }
 
   if (renValues.length > 0) {
     line(`# --- Rename Values ---`);
     for (const c of renValues) {
-      const psPath = toPsPath(c.path);
-      const oldName = c.valueName ?? '';
-      const newName = c.newName ?? '';
-      line(`# Rename value: ${c.path} -> ${oldName || '(Default)'} to ${newName}`);
-      line(`Rename-ItemProperty -Path '${q(psPath)}' -Name '${q(oldName)}' -NewName '${q(newName)}' -Force`);
-      blank();
+      line(`Rename-ItemProperty -Path '${q(toPsPath(c.path))}' -Name '${q(c.valueName ?? '')}' -NewName '${q(c.newName ?? '')}' -Force`);
     }
+    blank();
   }
 
   line(`exit 0`);
@@ -196,7 +244,11 @@ export function generateRemediationScript(changes: RegistryChange[], profileName
 
 // ── Detection Script Generator ────────────────────────────────────────────────
 
-export function generateDetectionScript(changes: RegistryChange[], profileName?: string): string {
+export function generateDetectionScript(
+  changes: RegistryChange[],
+  profileName?: string,
+  reversal = false,
+): string {
   const now = new Date().toISOString();
   const profile = profileName || 'RegBuddy';
 
@@ -205,14 +257,13 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
   const blank = () => L.push('');
 
   line(`<#`);
-  line(`  RegBuddy Detection Script`);
+  line(`  RegBuddy ${reversal ? 'Restore ' : ''}Detection Script`);
   line(`  Generated: ${now}`);
   line(`  Profile: ${profile}`);
-  line(`  Verifies registry changes are applied — exit 0 = compliant, exit 1 = run remediation`);
+  line(`  Verifies the ${reversal ? 'restore is' : 'changes are'} applied — exit 0 = compliant, exit 1 = run ${reversal ? 'restore' : 'remediation'}`);
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
-  line(`Set-StrictMode -Version Latest`);
   line(`$ErrorActionPreference = 'Stop'`);
   blank();
   line(`$allGood = $true`);
@@ -225,13 +276,11 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
   const renKeys   = changes.filter((c) => c.type === 'rename-key');
   const renValues = changes.filter((c) => c.type === 'rename-value');
 
-  // Check that added keys exist
-  for (const c of addKeys) {
-    const psPath = toPsPath(c.path);
-    line(`# Check: key ${c.path} should exist`);
-    line(`if (-not (Test-Path '${q(psPath)}')) { $allGood = $false }`);
-    blank();
+  // Check that added keys exist (deepest key implies its parents)
+  for (const path of minimalKeyPaths(addKeys.map((c) => c.path))) {
+    line(`if (-not (Test-Path '${q(toPsPath(path))}')) { $allGood = $false }`);
   }
+  if (addKeys.length > 0) blank();
 
   // Check that values have the correct data
   for (const c of setValues) {
@@ -239,9 +288,7 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
     const name   = c.valueName ?? '';
     const type   = c.valueType ?? 'REG_SZ';
     const data   = c.newData ?? '';
-    const displayName = name || '(Default)';
 
-    line(`# Check: ${c.path}\\${displayName} = ${data.substring(0, 60)} (${type})`);
     line(`try {`);
 
     if (name === '') {
@@ -285,9 +332,6 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
   for (const c of delValues) {
     const psPath = toPsPath(c.path);
     const name   = c.valueName ?? '';
-    const displayName = name || '(Default)';
-
-    line(`# Check: ${c.path}\\${displayName} should NOT exist`);
     line(`$exists = Get-ItemProperty -Path '${q(psPath)}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
     line(`if ($null -ne $exists) { $allGood = $false }`);
     blank();
@@ -295,21 +339,16 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
 
   // Check that deleted keys no longer exist
   for (const c of delKeys) {
-    const psPath = toPsPath(c.path);
-    line(`# Check: key ${c.path} should NOT exist`);
-    line(`if (Test-Path '${q(psPath)}') { $allGood = $false }`);
-    blank();
+    line(`if (Test-Path '${q(toPsPath(c.path))}') { $allGood = $false }`);
   }
+  if (delKeys.length > 0) blank();
 
   // Check that renamed keys exist with new name
   for (const c of renKeys) {
     const parentPath = c.path.substring(0, c.path.lastIndexOf('\\'));
     const newPath = parentPath ? parentPath + '\\' + (c.newName ?? '') : (c.newName ?? '');
-    const psNewPath = toPsPath(newPath);
-    const psOldPath = toPsPath(c.path);
-    line(`# Check: key ${c.path} should be renamed to ${c.newName}`);
-    line(`if (Test-Path '${q(psOldPath)}') { $allGood = $false }`);
-    line(`if (-not (Test-Path '${q(psNewPath)}')) { $allGood = $false }`);
+    line(`if (Test-Path '${q(toPsPath(c.path))}') { $allGood = $false }`);
+    line(`if (-not (Test-Path '${q(toPsPath(newPath))}')) { $allGood = $false }`);
     blank();
   }
 
@@ -318,7 +357,6 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
     const psPath = toPsPath(c.path);
     const oldName = c.valueName ?? '';
     const newName = c.newName ?? '';
-    line(`# Check: value ${c.path} -> ${oldName || '(Default)'} should be renamed to ${newName}`);
     line(`$old = Get-ItemProperty -Path '${q(psPath)}' -Name '${q(oldName)}' -ErrorAction SilentlyContinue`);
     line(`if ($null -ne $old) { $allGood = $false }`);
     line(`try {`);
@@ -336,10 +374,4 @@ export function generateDetectionScript(changes: RegistryChange[], profileName?:
   line(`}`);
 
   return L.join('\n');
-}
-
-// ── Legacy alias (for backward compatibility with ConfirmPage) ────────────────
-
-export function generatePowerShell(changes: RegistryChange[]): string {
-  return generateRemediationScript(changes);
 }

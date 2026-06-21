@@ -1,12 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
 import { RegistryChange } from '../../registry/types';
+import { parseRegFile } from '../../registry/parser';
 import {
   generateRemediationScript,
   generateDetectionScript,
   suggestProfileName,
 } from '../../registry/powershellGenerator';
-import { computeReversalChanges } from '../../registry/reversal';
+import { computeBackupRestore } from '../../registry/reversal';
 import { PowerShellHighlight } from './PowerShellHighlight';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -128,35 +129,53 @@ type ScriptTab = 'detection' | 'remediation';
 
 interface ExportScriptsDialogProps {
   onBack: () => void;
+  /** Open straight into restore mode (from the front-screen Restore button). */
+  initialRestore?: boolean;
 }
 
-export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack }) => {
+export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack, initialRestore = false }) => {
   const changes = useRegBuddyStore((s) => s.changes);
-  const baseline = useRegBuddyStore((s) => s.baseline);
 
   const [profileName, setProfileName] = useState(() => suggestProfileName(changes));
   const [mode, setMode] = useState<DeploymentMode>('platform');
   const [activeTab, setActiveTab] = useState<ScriptTab>(() => mode === 'remediation' ? 'detection' : 'remediation');
   const [copiedTab, setCopiedTab] = useState<ScriptTab | null>(null);
   const [changesCollapsed, setChangesCollapsed] = useState(false);
-  const [reversalMode, setReversalMode] = useState(false);
+  const [restoreMode, setRestoreMode] = useState(initialRestore);
 
-  // Compute reversal changes (what the script needs to apply to undo everything)
-  const reversalResult = useMemo(
-    () => computeReversalChanges(changes, baseline),
-    [changes, baseline],
-  );
+  // Restore mode returns the device to an uploaded backup snapshot — the .reg
+  // the remediation script captured before applying changes. No backup → no script.
+  const [backupName, setBackupName] = useState<string | null>(null);
+  const [backupContent, setBackupContent] = useState<string | null>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
-  // Active working set — either the original changes or the reversed ones
-  const activeChanges = reversalMode ? reversalResult.reversed : changes;
+  const handleBackupFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    // Concatenate all selected .reg files — parseRegFile ignores repeated headers.
+    const texts = await Promise.all(files.map((f) => f.text()));
+    setBackupContent(texts.join('\n'));
+    setBackupName(files.length === 1 ? files[0].name : `${files.length} files`);
+    e.target.value = '';
+  }, []);
+
+  const restoreChanges = useMemo(() => {
+    if (!restoreMode || !backupContent) return [];
+    return computeBackupRestore(changes, parseRegFile(backupContent));
+  }, [restoreMode, backupContent, changes]);
+
+  const backupReady = !restoreMode || (backupContent !== null);
+
+  // Active working set — original changes, or the backup-derived restore set.
+  const activeChanges = restoreMode ? restoreChanges : changes;
 
   const remediationScript = useMemo(
-    () => generateRemediationScript(activeChanges, profileName),
-    [activeChanges, profileName],
+    () => generateRemediationScript(activeChanges, profileName, restoreMode),
+    [activeChanges, profileName, restoreMode],
   );
   const detectionScript = useMemo(
-    () => generateDetectionScript(activeChanges, profileName),
-    [activeChanges, profileName],
+    () => generateDetectionScript(activeChanges, profileName, restoreMode),
+    [activeChanges, profileName, restoreMode],
   );
 
   // When switching to platform mode, force remediation tab
@@ -225,7 +244,8 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
   const handleDownload = useCallback(
     (tab: ScriptTab) => {
       const script = tab === 'detection' ? detectionScript : remediationScript;
-      const suffix = tab === 'detection' ? 'detection' : 'remediation';
+      const base = restoreMode ? 'restore' : 'remediation';
+      const suffix = tab === 'detection' ? `${base === 'restore' ? 'restore-' : ''}detection` : base;
       const filename = `${profileName || 'RegBuddy'}-${suffix}.ps1`;
       const blob = new Blob([script], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -235,7 +255,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
       a.click();
       URL.revokeObjectURL(url);
     },
-    [detectionScript, remediationScript, profileName],
+    [detectionScript, remediationScript, profileName, restoreMode],
   );
 
   return (
@@ -249,27 +269,31 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
           Back
         </button>
         <div className="confirmPage-title">
-          {reversalMode ? 'Reversal Script' : 'Export Scripts'}
+          {restoreMode ? 'Restore Script' : 'Export Scripts'}
           <span className="confirmPage-title-sub">
-            {reversalMode
-              ? `${reversalResult.reversed.length} reversal op${reversalResult.reversed.length !== 1 ? 's' : ''}`
+            {restoreMode
+              ? backupContent
+                ? `${restoreChanges.length} restore op${restoreChanges.length !== 1 ? 's' : ''}`
+                : 'backup required'
               : `${changes.length} change${changes.length !== 1 ? 's' : ''}`}
           </span>
         </div>
         <div className="confirmPage-header-actions">
-          <span className="reversal-safety-note">
-            Keys are never deleted — values only
-          </span>
+          {restoreMode && (
+            <span className="reversal-safety-note">
+              Restores the device to the uploaded backup
+            </span>
+          )}
           <button
-            className={`confirmPage-reversal-btn${reversalMode ? ' active' : ''}`}
-            onClick={() => setReversalMode((v) => !v)}
-            title="Toggle reversal mode — generates a script that undoes all listed changes. Keys added by changes will NOT be deleted for safety."
+            className={`confirmPage-reversal-btn${restoreMode ? ' active' : ''}`}
+            onClick={() => setRestoreMode((v) => !v)}
+            title="Toggle restore mode — returns the device to a backup .reg captured before the changes were applied."
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
               <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
             </svg>
-            Reversal Mode
+            Restore mode
           </button>
         </div>
       </div>
@@ -325,26 +349,45 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             </div>
           </div>
 
-          {/* Reversal mode warning banner */}
-          {reversalMode && (
-            <div className="reversal-banner">
-              <div className="reversal-banner-header">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
-                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+          {/* Automatic-backup safety card (apply mode) */}
+          {!restoreMode && (
+            <div className="export-safety">
+              <div className="export-safety-header">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 0 1 3v5c0 4 3 6.5 7 8 4-1.5 7-4 7-8V3L8 0zm0 1.5 5.5 2.4V8c0 3.1-2.2 5.1-5.5 6.4C4.7 13.1 2.5 11.1 2.5 8V3.9L8 1.5z"/>
                 </svg>
-                Reversal mode — script will delete added values
+                Automatic backup before any change
               </div>
-              {reversalResult.warnings.length > 0 && (
-                <div className="reversal-banner-warnings">
-                  <div className="reversal-banner-warnings-title">
-                    ⚠ {reversalResult.warnings.length} change{reversalResult.warnings.length !== 1 ? 's' : ''} skipped (original value unknown):
-                  </div>
-                  {reversalResult.warnings.map((w, i) => (
-                    <div key={i} className="reversal-warning-item">{w}</div>
-                  ))}
-                </div>
-              )}
+              <p className="export-safety-text">
+                Before writing anything, the script exports every key it touches to{' '}
+                <code>%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>.
+                This snapshot captures the device's <strong>real</strong> state — including data
+                RegBuddy can't see — so it's your reliable rollback. To undo, run{' '}
+                <code>reg import</code> on the saved <code>.reg</code> files.
+              </p>
+            </div>
+          )}
+
+          {/* Restore mode — hidden input is always mounted so both the center
+              step button and the "change backup" button can trigger it. The
+              upload instructions live in the center step, so once a backup is
+              loaded we only show a compact status row here. */}
+          {restoreMode && (
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept=".reg"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleBackupFiles}
+            />
+          )}
+          {restoreMode && backupContent && (
+            <div className="reversal-upload">
+              <span className="reversal-upload-file">✓ {backupName} loaded</span>
+              <button className="confirmPage-btn" onClick={() => backupInputRef.current?.click()}>
+                Change backup…
+              </button>
             </div>
           )}
 
@@ -358,7 +401,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             >
               <path d="M3 1 L7 5 L3 9" fill="none" stroke="currentColor" strokeWidth="1.2" />
             </svg>
-            {reversalMode ? `Reversal operations (${reversalResult.reversed.length})` : `Changes summary (${changes.length})`}
+            {restoreMode ? `Restore operations (${restoreChanges.length})` : `Changes summary (${changes.length})`}
           </div>
           {!changesCollapsed && (
             <div className="confirmPage-changesList">
@@ -401,6 +444,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
               <button
                 className="confirmPage-btn"
                 onClick={() => handleCopy(activeTab)}
+                disabled={!backupReady}
               >
                 {copiedTab === activeTab ? <CheckIcon /> : <CopyIcon />}
                 {copiedTab === activeTab ? 'Copied!' : 'Copy'}
@@ -408,6 +452,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
               <button
                 className="confirmPage-btn primary"
                 onClick={() => handleDownload(activeTab)}
+                disabled={!backupReady}
               >
                 <DownloadIcon />
                 Download .ps1
@@ -417,7 +462,27 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
 
           {/* Script preview */}
           <div className="confirmPage-scriptWrap">
-            <PowerShellHighlight code={currentScript} className="confirmPage-scriptPre" />
+            {backupReady ? (
+              <PowerShellHighlight code={currentScript} className="confirmPage-scriptPre" />
+            ) : (
+              <div className="confirmPage-restore-step">
+                <svg width="34" height="34" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+                </svg>
+                <h2>Upload the RegBuddy backup to continue</h2>
+                <p>
+                  Restore needs the backup <code>.reg</code> that RegBuddy saved on the device
+                  <strong> before</strong> these changes were applied. Find it on the device at:
+                </p>
+                <code className="confirmPage-restore-path">%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>
+                <button className="confirmPage-btn primary" onClick={() => backupInputRef.current?.click()}>
+                  <DownloadIcon />
+                  Upload backup .reg…
+                </button>
+                <span className="confirmPage-restore-hint">Select all <code>.reg</code> files in that folder.</span>
+              </div>
+            )}
           </div>
 
           {/* Intune instructions */}

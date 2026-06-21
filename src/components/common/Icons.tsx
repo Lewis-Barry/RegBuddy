@@ -70,51 +70,22 @@ export const ComputerIcon: React.FC<{ className?: string }> = ({ className }) =>
   </svg>
 );
 
-/** Returns the appropriate icon for a registry value type */
-export function getValueIcon(type: RegistryValueType): string {
-  switch (type) {
-    case 'REG_SZ':
-    case 'REG_EXPAND_SZ':
-    case 'REG_MULTI_SZ':
-      return 'ab'; // string type
-    case 'REG_DWORD':
-    case 'REG_QWORD':
-    case 'REG_BINARY':
-      return '01'; // binary/numeric type
-    default:
-      return '??';
-  }
-}
-
-export const StringValueIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <rect x="1" y="2" width="14" height="12" rx="1" fill="#fff" stroke="#ccc" strokeWidth="0.5" />
-    <text x="2" y="11" fontSize="8" fontFamily="Consolas, monospace" fill="#cc0000" fontWeight="bold">
-      ab
-    </text>
-    <line x1="11" y1="4" x2="11" y2="12" stroke="#cc0000" strokeWidth="1.2" />
-  </svg>
-);
-
-export const BinaryValueIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <rect x="1" y="2" width="14" height="12" rx="1" fill="#fff" stroke="#ccc" strokeWidth="0.5" />
-    <text x="2" y="11" fontSize="7" fontFamily="Consolas, monospace" fill="#0000cc" fontWeight="bold">
-      011
-    </text>
-  </svg>
-);
-
 export const ValueIcon: React.FC<{ type: RegistryValueType; className?: string }> = ({
   type,
   className,
 }) => {
-  switch (type) {
-    case 'REG_SZ':
-    case 'REG_EXPAND_SZ':
-    case 'REG_MULTI_SZ':
-      return <StringValueIcon className={className} />;
-    default:
-      return <BinaryValueIcon className={className} />;
-  }
+  const isString = type === 'REG_SZ' || type === 'REG_EXPAND_SZ' || type === 'REG_MULTI_SZ';
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1" y="2" width="14" height="12" rx="1" fill="#fff" stroke="#ccc" strokeWidth="0.5" />
+      {isString ? (
+        <>
+          <text x="2" y="11" fontSize="8" fontFamily="Consolas, monospace" fill="#cc0000" fontWeight="bold">ab</text>
+          <line x1="11" y1="4" x2="11" y2="12" stroke="#cc0000" strokeWidth="1.2" />
+        </>
+      ) : (
+        <text x="2" y="11" fontSize="7" fontFamily="Consolas, monospace" fill="#0000cc" fontWeight="bold">011</text>
+      )}
+    </svg>
+  );
 };

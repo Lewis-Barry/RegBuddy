@@ -50,11 +50,14 @@ export interface RegistryChange {
   timestamp: number;
 }
 
-export interface ChangeManifest {
-  _regbuddy: true;
-  version: number;
-  generatedAt: string;
-  changes: Omit<RegistryChange, 'id' | 'timestamp'>[];
+/** Find a key in the tree by full path */
+export function findKey(root: RegistryKey, path: string): RegistryKey | null {
+  if (root.path === path) return root;
+  for (const child of root.children) {
+    const found = findKey(child, path);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** The five root hives */

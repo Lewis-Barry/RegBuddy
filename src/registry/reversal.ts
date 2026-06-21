@@ -1,190 +1,86 @@
-import { RegistryChange, RegistryKey } from './types';
+import { RegistryChange, RegistryKey, ROOT_HIVES, findKey } from './types';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const revId = () => crypto.randomUUID();
+const isHiveRoot = (path: string) => (ROOT_HIVES as readonly string[]).includes(path);
 
-let _revId = 1;
-function revId(): string {
-  return `rev-${_revId++}`;
-}
-
-function findKey(root: RegistryKey, path: string): RegistryKey | null {
-  if (root.path === path) return root;
-  for (const child of root.children) {
-    const found = findKey(child, path);
-    if (found) return found;
-  }
-  return null;
-}
-
-// ── Computation ───────────────────────────────────────────────────────────────
-
-export interface ReversalResult {
-  /** Change set to feed into the script generators */
-  reversed: RegistryChange[];
-  /**
-   * Human-readable warnings for changes that could not be fully reversed
-   * because the original value is unknown (no originalData and not in baseline).
-   */
-  warnings: string[];
+/** Compute the post-rename path of a rename-key change. */
+function renamedPath(c: RegistryChange): string {
+  const parent = c.path.substring(0, c.path.lastIndexOf('\\'));
+  return parent ? `${parent}\\${c.newName ?? ''}` : (c.newName ?? '');
 }
 
 /**
- * Takes the current set of changes and the baseline registry tree, and
- * computes the "reversal" set of changes — i.e. what you'd need to apply
- * to undo every change recorded in `changes`.
+ * Build a restore change-set from an uploaded backup — the .reg snapshot the
+ * remediation script captured ON THE DEVICE before applying changes.
  *
- * Rules:
- *   add-key      → SKIPPED — keys are never deleted in reversal mode (safety constraint)
- *   delete-key   → add-key + restore values from baseline
- *   add-value    → delete-value
- *   delete-value → add-value with original data from baseline (warn if unknown)
- *   modify-value → modify-value with swapped data (restore original; warn if unknown)
- *   rename-key   → rename-key back to original name
- *   rename-value → rename-value back to original name
+ * The backup is the device's REAL prior state, so restoring to it is exact,
+ * not a baseline guess. Two parts:
  *
- * NOTE: Keys are intentionally never deleted during reversal to avoid breaking
- * critical system or application registry structures.
+ *   1. Re-apply everything the backup contains. This restores modified and
+ *      deleted values, and recreates any key that existed before.
+ *   2. Delete anything the change-set ADDED that the backup does not contain
+ *      (added keys/values, plus rename targets). Deleting keys is safe here
+ *      because the backup proves they weren't present before the change.
+ *
+ * `changes` is the applied change-set still loaded in the editor; `backup` is
+ * the parsed uploaded snapshot.
  */
-export function computeReversalChanges(
+export function computeBackupRestore(
   changes: RegistryChange[],
-  baseline: RegistryKey,
-): ReversalResult {
-  const reversed: RegistryChange[] = [];
-  const warnings: string[] = [];
-  const now = Date.now();
+  backup: RegistryKey,
+): RegistryChange[] {
+  const restore: RegistryChange[] = [];
+
+  // 1. Re-apply the backup's contents (its true prior state).
+  (function walk(node: RegistryKey) {
+    if (node.path !== 'Computer' && !isHiveRoot(node.path)) {
+      restore.push({ id: revId(), type: 'add-key', path: node.path, timestamp: Date.now() });
+    }
+    for (const v of node.values) {
+      restore.push({
+        id: revId(),
+        type: 'add-value',
+        path: node.path,
+        valueName: v.name,
+        valueType: v.type,
+        newData: v.data,
+        timestamp: Date.now(),
+      });
+    }
+    node.children.forEach(walk);
+  })(backup);
+
+  // 2. Delete additions the backup doesn't contain.
+  const keysToDelete = new Set<string>();
+  for (const c of changes) {
+    if (c.type === 'add-key' && !findKey(backup, c.path)) keysToDelete.add(c.path);
+    if (c.type === 'rename-key') {
+      const np = renamedPath(c);
+      if (np && !findKey(backup, np)) keysToDelete.add(np);
+    }
+  }
+  const underDeletedKey = (p: string) =>
+    [...keysToDelete].some((k) => p === k || p.startsWith(k + '\\'));
+
+  for (const path of keysToDelete) {
+    restore.push({ id: revId(), type: 'delete-key', path, timestamp: Date.now() });
+  }
 
   for (const c of changes) {
-    switch (c.type) {
-      // ── add-key → SKIP silently (keys are never deleted in reversal mode) ──
-      case 'add-key': {
-        // Intentional no-op: reversal never deletes keys (only values).
-        break;
+    if (underDeletedKey(c.path)) continue; // whole key is being removed already
+    const backupKey = findKey(backup, c.path);
+    if (c.type === 'add-value' || c.type === 'modify-value') {
+      const present = backupKey?.values.some((v) => v.name === (c.valueName ?? ''));
+      if (!present) {
+        restore.push({ id: revId(), type: 'delete-value', path: c.path, valueName: c.valueName, timestamp: Date.now() });
       }
-
-      // ── delete-key → re-add the key (and all its baseline values) ────────
-      case 'delete-key': {
-        reversed.push({
-          id: revId(),
-          type: 'add-key',
-          path: c.path,
-          timestamp: now,
-        });
-        // Restore all values that existed in baseline
-        const baselineKey = findKey(baseline, c.path);
-        if (baselineKey) {
-          for (const val of baselineKey.values) {
-            reversed.push({
-              id: revId(),
-              type: 'add-value',
-              path: c.path,
-              valueName: val.name,
-              valueType: val.type,
-              newData: val.data,
-              timestamp: now,
-            });
-          }
-        } else {
-          warnings.push(
-            `Key "${c.path}" was not found in baseline — values cannot be restored (key structure only).`,
-          );
-        }
-        break;
-      }
-
-      // ── add-value → delete the value that was added ──────────────────────
-      case 'add-value': {
-        reversed.push({
-          id: revId(),
-          type: 'delete-value',
-          path: c.path,
-          valueName: c.valueName,
-          timestamp: now,
-        });
-        break;
-      }
-
-      // ── delete-value → restore from baseline (or warn) ───────────────────
-      case 'delete-value': {
-        const baselineKey = findKey(baseline, c.path);
-        const baselineVal = baselineKey?.values.find((v) => v.name === (c.valueName ?? ''));
-        if (baselineVal) {
-          reversed.push({
-            id: revId(),
-            type: 'add-value',
-            path: c.path,
-            valueName: c.valueName,
-            valueType: baselineVal.type,
-            newData: baselineVal.data,
-            timestamp: now,
-          });
-        } else {
-          warnings.push(
-            `Value "${c.valueName || '(Default)'}" at "${c.path}" was deleted but its original data is not in the loaded baseline — this change was skipped.`,
-          );
-        }
-        break;
-      }
-
-      // ── modify-value → restore original data ─────────────────────────────
-      case 'modify-value': {
-        // Prefer the originalData recorded in the change; fall back to baseline
-        const baselineKey = findKey(baseline, c.path);
-        const baselineVal = baselineKey?.values.find((v) => v.name === (c.valueName ?? ''));
-        const originalData = c.originalData ?? baselineVal?.data;
-        const originalType = baselineVal?.type ?? c.valueType;
-
-        if (originalData !== undefined && originalType !== undefined) {
-          reversed.push({
-            id: revId(),
-            type: 'modify-value',
-            path: c.path,
-            valueName: c.valueName,
-            valueType: originalType,
-            newData: originalData,
-            originalData: c.newData,
-            timestamp: now,
-          });
-        } else {
-          warnings.push(
-            `Value "${c.valueName || '(Default)'}" at "${c.path}" was modified but the original data is unknown — this change was skipped.`,
-          );
-        }
-        break;
-      }
-
-      // ── rename-key → rename back to original name ─────────────────────────
-      case 'rename-key': {
-        if (c.newName) {
-          const parentPath = c.path.substring(0, c.path.lastIndexOf('\\'));
-          const renamedPath = parentPath ? `${parentPath}\\${c.newName}` : c.newName;
-          const originalLeaf = c.path.split('\\').pop() ?? c.path;
-          reversed.push({
-            id: revId(),
-            type: 'rename-key',
-            path: renamedPath,
-            newName: originalLeaf,
-            timestamp: now,
-          });
-        }
-        break;
-      }
-
-      // ── rename-value → rename back to original name ───────────────────────
-      case 'rename-value': {
-        if (c.valueName !== undefined && c.newName !== undefined) {
-          reversed.push({
-            id: revId(),
-            type: 'rename-value',
-            path: c.path,
-            valueName: c.newName,      // current name (was renamed to this)
-            newName: c.valueName,       // original name
-            timestamp: now,
-          });
-        }
-        break;
+    } else if (c.type === 'rename-value') {
+      const present = backupKey?.values.some((v) => v.name === c.newName);
+      if (!present) {
+        restore.push({ id: revId(), type: 'delete-value', path: c.path, valueName: c.newName, timestamp: Date.now() });
       }
     }
   }
 
-  return { reversed, warnings };
+  return restore;
 }
