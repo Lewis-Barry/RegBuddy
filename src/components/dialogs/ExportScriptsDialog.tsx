@@ -1,13 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
 import { RegistryChange } from '../../registry/types';
-import { parseRegFile, readRegFile } from '../../registry/parser';
 import {
   generateRemediationScript,
   generateDetectionScript,
   suggestProfileName,
 } from '../../registry/powershellGenerator';
-import { computeBackupRestore } from '../../registry/reversal';
 import { PowerShellHighlight } from './PowerShellHighlight';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -129,11 +127,9 @@ type ScriptTab = 'detection' | 'remediation';
 
 interface ExportScriptsDialogProps {
   onBack: () => void;
-  /** Open straight into restore mode (from the front-screen Restore button). */
-  initialRestore?: boolean;
 }
 
-export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack, initialRestore = false }) => {
+export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack }) => {
   const changes = useRegBuddyStore((s) => s.changes);
 
   const [profileName, setProfileName] = useState(() => suggestProfileName(changes));
@@ -141,42 +137,14 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
   const [activeTab, setActiveTab] = useState<ScriptTab>(() => mode === 'remediation' ? 'detection' : 'remediation');
   const [copiedTab, setCopiedTab] = useState<ScriptTab | null>(null);
   const [changesCollapsed, setChangesCollapsed] = useState(false);
-  const [restoreMode, setRestoreMode] = useState(initialRestore);
-  const [includeBackup, setIncludeBackup] = useState(true);
-
-  // Restore mode returns the device to an uploaded backup snapshot: the .reg
-  // the remediation script captured before applying changes. No backup, no script.
-  const [backupName, setBackupName] = useState<string | null>(null);
-  const [backupContent, setBackupContent] = useState<string | null>(null);
-  const backupInputRef = useRef<HTMLInputElement>(null);
-
-  const handleBackupFiles = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    // Concatenate all selected .reg files — parseRegFile ignores repeated headers.
-    const texts = await Promise.all(files.map((f) => readRegFile(f)));
-    setBackupContent(texts.join('\n'));
-    setBackupName(files.length === 1 ? files[0].name : `${files.length} files`);
-    e.target.value = '';
-  }, []);
-
-  const restoreChanges = useMemo(() => {
-    if (!restoreMode || !backupContent) return [];
-    return computeBackupRestore(changes, parseRegFile(backupContent));
-  }, [restoreMode, backupContent, changes]);
-
-  const backupReady = !restoreMode || (backupContent !== null);
-
-  // Active working set — original changes, or the backup-derived restore set.
-  const activeChanges = restoreMode ? restoreChanges : changes;
 
   const remediationScript = useMemo(
-    () => generateRemediationScript(activeChanges, profileName, restoreMode, includeBackup),
-    [activeChanges, profileName, restoreMode, includeBackup],
+    () => generateRemediationScript(changes, profileName),
+    [changes, profileName],
   );
   const detectionScript = useMemo(
-    () => generateDetectionScript(activeChanges, profileName, restoreMode),
-    [activeChanges, profileName, restoreMode],
+    () => generateDetectionScript(changes, profileName),
+    [changes, profileName],
   );
 
   // When switching to platform mode, force remediation tab
@@ -194,7 +162,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
 
   const currentScript = activeTab === 'detection' ? detectionScript : remediationScript;
 
-  // Group changes by category (uses the active set — original or reversed)
+  // Group changes by category
   const grouped = useMemo(() => {
     const groups: Record<string, RegistryChange[]> = {
       'add-key':       [],
@@ -205,11 +173,11 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
       'rename-value':  [],
       'delete-value':  [],
     };
-    for (const c of activeChanges) {
+    for (const c of changes) {
       groups[c.type]?.push(c);
     }
     return groups;
-  }, [activeChanges]);
+  }, [changes]);
 
   const orderedGroups: [string, RegistryChange[]][] = [
     ['add-key',       grouped['add-key']],
@@ -245,8 +213,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
   const handleDownload = useCallback(
     (tab: ScriptTab) => {
       const script = tab === 'detection' ? detectionScript : remediationScript;
-      const base = restoreMode ? 'restore' : 'remediation';
-      const suffix = tab === 'detection' ? `${base === 'restore' ? 'restore-' : ''}detection` : base;
+      const suffix = tab === 'detection' ? 'detection' : 'remediation';
       const filename = `${profileName || 'RegBuddy'}-${suffix}.ps1`;
       const blob = new Blob([script], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -256,7 +223,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
       a.click();
       URL.revokeObjectURL(url);
     },
-    [detectionScript, remediationScript, profileName, restoreMode],
+    [detectionScript, remediationScript, profileName],
   );
 
   return (
@@ -270,32 +237,10 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
           Back
         </button>
         <div className="confirmPage-title">
-          {restoreMode ? 'Restore Script' : 'Export Scripts'}
+          Export Scripts
           <span className="confirmPage-title-sub">
-            {restoreMode
-              ? backupContent
-                ? `${restoreChanges.length} restore op${restoreChanges.length !== 1 ? 's' : ''}`
-                : 'backup required'
-              : `${changes.length} change${changes.length !== 1 ? 's' : ''}`}
+            {`${changes.length} change${changes.length !== 1 ? 's' : ''}`}
           </span>
-        </div>
-        <div className="confirmPage-header-actions">
-          {restoreMode && (
-            <span className="reversal-safety-note">
-              Restores the device to the uploaded backup
-            </span>
-          )}
-          <button
-            className={`confirmPage-reversal-btn${restoreMode ? ' active' : ''}`}
-            onClick={() => setRestoreMode((v) => !v)}
-            title="Toggle restore mode: returns the device to a backup .reg captured before the changes were applied."
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
-              <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
-            </svg>
-            Restore mode
-          </button>
         </div>
       </div>
 
@@ -350,64 +295,6 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             </div>
           </div>
 
-          {/* Backup toggle (applies to both apply and restore scripts) */}
-          <div className={`export-safety${includeBackup ? '' : ' off'}`}>
-              <label className="export-safety-header">
-                <input
-                  type="checkbox"
-                  checked={includeBackup}
-                  onChange={(e) => setIncludeBackup(e.target.checked)}
-                />
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4.414a1 1 0 0 0-.293-.707l-2.414-2.414A1 1 0 0 0 11.586 1H2zm10 13H4v-4h8v4zM4 2v3h6V2H4z"/>
-                </svg>
-                Back up affected keys before changes
-              </label>
-              <p className="export-safety-text">
-                {includeBackup ? (
-                  <>
-                    The script first saves every key it touches to a{' '}
-                    <code>backup.reg</code> under{' '}
-                    <code>%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>{' '}
-                    (or <code>%TEMP%</code> if that is not writable). That file is your rollback: run{' '}
-                    <code>reg import</code> on it to undo. Leave this on unless you take backups another way.
-                  </>
-                ) : (
-                  <>No backup will be taken. The script applies changes with no automatic rollback point. Make sure you have your own backup first.</>
-                )}
-              </p>
-          </div>
-
-          {/* Restore mode: hidden input is always mounted so both the center
-              step button and the "change backup" button can trigger it. The
-              upload instructions live in the center step, so once a backup is
-              loaded we only show a compact status row here. */}
-          {restoreMode && (
-            <input
-              ref={backupInputRef}
-              type="file"
-              accept=".reg"
-              multiple
-              style={{ display: 'none' }}
-              onChange={handleBackupFiles}
-            />
-          )}
-          {restoreMode && backupContent && (
-            <div className="reversal-upload">
-              <span className="reversal-upload-file">✓ {backupName} loaded</span>
-              <button className="confirmPage-btn" onClick={() => backupInputRef.current?.click()}>
-                Change backup…
-              </button>
-              <button
-                className="confirmPage-btn"
-                onClick={() => { setBackupContent(null); setBackupName(null); }}
-                title="Clear the uploaded backup and start over"
-              >
-                Clear
-              </button>
-            </div>
-          )}
-
           {/* Changes summary (collapsible) */}
           <div className="export-changes-toggle" onClick={() => setChangesCollapsed(!changesCollapsed)}>
             <svg
@@ -418,7 +305,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
             >
               <path d="M3 1 L7 5 L3 9" fill="none" stroke="currentColor" strokeWidth="1.2" />
             </svg>
-            {restoreMode ? `Restore operations (${restoreChanges.length})` : `Changes summary (${changes.length})`}
+            {`Changes summary (${changes.length})`}
           </div>
           {!changesCollapsed && (
             <div className="confirmPage-changesList">
@@ -461,7 +348,6 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
               <button
                 className="confirmPage-btn"
                 onClick={() => handleCopy(activeTab)}
-                disabled={!backupReady}
               >
                 {copiedTab === activeTab ? <CheckIcon /> : <CopyIcon />}
                 {copiedTab === activeTab ? 'Copied!' : 'Copy'}
@@ -469,7 +355,6 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
               <button
                 className="confirmPage-btn primary"
                 onClick={() => handleDownload(activeTab)}
-                disabled={!backupReady}
               >
                 <DownloadIcon />
                 Download .ps1
@@ -479,27 +364,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
 
           {/* Script preview */}
           <div className="confirmPage-scriptWrap">
-            {backupReady ? (
-              <PowerShellHighlight code={currentScript} className="confirmPage-scriptPre" />
-            ) : (
-              <div className="confirmPage-restore-step">
-                <svg width="34" height="34" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
-                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
-                </svg>
-                <h2>Upload the RegBuddy backup to continue</h2>
-                <p>
-                  Restore needs the backup <code>.reg</code> that RegBuddy saved on the device
-                  <strong> before</strong> these changes were applied. Find it on the device at:
-                </p>
-                <code className="confirmPage-restore-path">%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>
-                <button className="confirmPage-btn primary" onClick={() => backupInputRef.current?.click()}>
-                  <DownloadIcon />
-                  Upload backup .reg…
-                </button>
-                <span className="confirmPage-restore-hint">Upload the <code>backup.reg</code> from that folder.</span>
-              </div>
-            )}
+            <PowerShellHighlight code={currentScript} className="confirmPage-scriptPre" />
           </div>
 
           {/* Intune instructions */}

@@ -16,7 +16,6 @@ const PATH_TIP_KEY = 'regbuddy-pathtip-seen';
 
 const App: React.FC = () => {
   const [showExport, setShowExport]   = useState(false);
-  const [exportRestore, setExportRestore] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [showAbout, setShowAbout]     = useState(false);
@@ -25,8 +24,7 @@ const App: React.FC = () => {
   const dismissPathTip = () => { localStorage.setItem(PATH_TIP_KEY, '1'); setShowPathTip(false); };
   const handleShowWelcome = () => { setShowWelcome(true); setShowPathTip(true); };
 
-  const handleGetScripts  = () => { setShowCompare(false); setExportRestore(false); setShowExport(true); };
-  const handleRestore     = () => { setShowCompare(false); setExportRestore(true);  setShowExport(true); };
+  const handleGetScripts  = () => { setShowCompare(false); setShowExport(true); };
   const handleCompare     = () => { setShowExport(false);  setShowCompare(true); };
   const handleWelcomeDismiss = (dontShowAgain: boolean) => {
     if (dontShowAgain) localStorage.setItem(WELCOME_KEY, '1');
@@ -35,7 +33,7 @@ const App: React.FC = () => {
 
   return (
     <div className="regedit" style={{ position: 'relative' }}>
-      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} onRestore={handleRestore} onAbout={() => setShowAbout(true)} onShowWelcome={handleShowWelcome} />
+      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} onAbout={() => setShowAbout(true)} onShowWelcome={handleShowWelcome} />
       <AddressBar showTip={showPathTip && !showWelcome} onCloseTip={dismissPathTip} />
       <SplitPane
         left={<TreePanel />}
@@ -44,7 +42,7 @@ const App: React.FC = () => {
       />
       <ChangesPanel onGetScripts={handleGetScripts} />
       <StatusBar />
-      {showExport  && <ExportScriptsDialog onBack={() => setShowExport(false)} initialRestore={exportRestore} />}
+      {showExport  && <ExportScriptsDialog onBack={() => setShowExport(false)} />}
       {showCompare && <RegCompareDialog    onBack={() => setShowCompare(false)} />}
       {showWelcome && <WelcomeModal onDismiss={handleWelcomeDismiss} />}
       {showAbout   && <AboutModal onClose={() => setShowAbout(false)} />}

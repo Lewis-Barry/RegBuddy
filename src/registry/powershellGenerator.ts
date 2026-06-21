@@ -101,12 +101,9 @@ export function suggestProfileName(changes: RegistryChange[]): string {
 export function generateRemediationScript(
   changes: RegistryChange[],
   profileName?: string,
-  reversal = false,
-  includeBackup = true,
 ): string {
   const now = new Date().toISOString();
   const profile = profileName || 'RegBuddy';
-  const safeProfile = profile.replace(/[^\w.-]/g, '_') || 'RegBuddy';
 
   const addKeys   = changes.filter((c) => c.type === 'add-key');
   const setValues = changes.filter((c) => c.type === 'add-value' || c.type === 'modify-value');
@@ -121,111 +118,15 @@ export function generateRemediationScript(
   const blank = () => L.push('');
 
   line(`<#`);
-  line(`  RegBuddy ${reversal ? 'Restore' : 'Remediation'} Script`);
+  line(`  RegBuddy Remediation Script`);
   line(`  Generated: ${now}`);
   line(`  Profile: ${profile}`);
   line(`  Changes: ${changes.length}`);
-  if (reversal) line(`  Note: restores the affected keys to the uploaded backup snapshot and removes what was added.`);
-  if (includeBackup) {
-    line(`  Backup: affected keys are exported (BEFORE any change) to a single backup.reg under`);
-    line(`          %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp> (or %TEMP% if not writable). Path printed at runtime; roll back with  reg import.`);
-  }
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
   line(`$ErrorActionPreference = 'Stop'`);
   blank();
-
-  // --- Snapshot the live state of every touched key before writing anything.
-  // This is the reliable rollback: it captures the device's real prior state,
-  // including data RegBuddy never modelled. Keys that don't exist yet simply
-  // produce no backup (reg export is best-effort here).
-  // Back up only the keys we actually touch (deduped) — NOT their ancestors.
-  // `reg export <key>` already captures that key's subtree; collapsing to
-  // ancestors would export huge unrelated trees. add-key paths are new, so
-  // there's nothing to back up for them.
-  // Back up only the data about to be manipulated. `reg export <key>` always
-  // dumps the key's whole subtree, so for value changes we filter its output
-  // down to just the touched value lines. Deleted/renamed keys keep the full
-  // subtree (it's all being manipulated). add-key/add-value have no prior state.
-  const specMap = new Map<string, { whole: boolean; values: Set<string> }>();
-  const getSpec = (key: string) => {
-    let s = specMap.get(key);
-    if (!s) { s = { whole: false, values: new Set<string>() }; specMap.set(key, s); }
-    return s;
-  };
-  for (const c of changes) {
-    const key = cleanPath(c.path);
-    if (!key) continue;
-    if (c.type === 'delete-key' || c.type === 'rename-key') getSpec(key).whole = true;
-    else if (c.type === 'modify-value' || c.type === 'delete-value' || c.type === 'rename-value')
-      getSpec(key).values.add(c.valueName ?? '');
-  }
-  const backupSpecs = [...specMap.entries()]
-    .filter(([, s]) => s.whole || s.values.size > 0)
-    .sort((a, b) => a[0].localeCompare(b[0]));
-
-  if (includeBackup && backupSpecs.length > 0) {
-    line(`# --- Backup the data we're about to change (rollback safety net) ---`);
-    line(`$ts = Get-Date -Format 'yyyyMMdd-HHmmss'`);
-    line(`# Prefer ProgramData (machine-wide, admin-retrievable). A standard-user run`);
-    line(`# may be denied there if the folder is SYSTEM-owned, so fall back to TEMP.`);
-    line(`$backupDir = Join-Path $env:ProgramData "RegBuddy\\${safeProfile}-$ts"`);
-    line(`try {`);
-    line(`    New-Item -Path $backupDir -ItemType Directory -Force -ErrorAction Stop | Out-Null`);
-    line(`} catch {`);
-    line(`    $backupDir = Join-Path $env:TEMP "RegBuddy\\${safeProfile}-$ts"`);
-    line(`    New-Item -Path $backupDir -ItemType Directory -Force | Out-Null`);
-    line(`}`);
-    line(`$backupFile = Join-Path $backupDir 'backup.reg'`);
-    line(`# Per key: Values=$null means keep the whole exported subtree (key is being`);
-    line(`# deleted/renamed); otherwise keep only the listed value names.`);
-    line(`$backupSpec = @(`);
-    backupSpecs.forEach(([key, s]) => {
-      const vals = s.whole
-        ? '$null'
-        : `@(${[...s.values].map((v) => `'${q(v)}'`).join(', ')})`;
-      line(`    @{ Key = '${q(key)}'; Values = ${vals} }`);
-    });
-    line(`)`);
-    // Write one valid .reg header up front, then append each filtered block.
-    line(`Set-Content -LiteralPath $backupFile -Value 'Windows Registry Editor Version 5.00' -Encoding Unicode`);
-    line(`Add-Content -LiteralPath $backupFile -Value '' -Encoding Unicode`);
-    line(`$wrote = 0`);
-    line(`foreach ($spec in $backupSpec) {`);
-    line(`    $tmp = New-TemporaryFile`);
-    line(`    reg export $spec.Key $tmp.FullName /y *> $null`);
-    line(`    $raw = Get-Content -LiteralPath $tmp.FullName -Encoding Unicode`);
-    line(`    Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue`);
-    line(`    if (-not $raw) { continue }   # key does not exist, nothing to back up`);
-    line(`    if ($null -eq $spec.Values) {`);
-    line(`        $block = $raw | Select-Object -Skip 1   # whole subtree, minus the version header`);
-    line(`    } else {`);
-    line(`        $block = @(); $cur = ''; $keepVal = $false`);
-    line(`        foreach ($ln in $raw) {`);
-    line(`            if ($ln -match '^\\[(.+)\\]\\s*$') {            # section header [key]`);
-    line(`                $cur = $matches[1]`);
-    line(`                if ($cur -ieq $spec.Key) { $block += $ln }  # keep the target key's header`);
-    line(`                $keepVal = $false; continue`);
-    line(`            }`);
-    line(`            if ($cur -ine $spec.Key) { continue }           # skip subkeys' values`);
-    line(`            if ($ln -match '^\\s') { if ($keepVal) { $block += $ln }; continue }  # hex continuation`);
-    line(`            $vn = $null`);
-    line(`            if ($ln -match '^@=') { $vn = '' }`);
-    line(`            elseif ($ln -match '^"((?:[^"\\\\]|\\\\.)*)"=') { $vn = $matches[1] -replace '\\\\(.)','$1' }`);
-    line(`            # keep matching values; fail safe by keeping anything we can't parse`);
-    line(`            $keepVal = ($null -ne $vn -and $spec.Values -contains $vn) -or ($null -eq $vn -and $ln.Trim())`);
-    line(`            if ($keepVal) { $block += $ln }`);
-    line(`        }`);
-    line(`        if ($block.Count -le 1) { continue }   # only the header survived → nothing to restore`);
-    line(`    }`);
-    line(`    Add-Content -LiteralPath $backupFile -Value $block -Encoding Unicode`);
-    line(`    Add-Content -LiteralPath $backupFile -Value '' -Encoding Unicode`);
-    line(`    $wrote++`);
-    line(`}`);
-    line(`if ($wrote -gt 0) { Write-Output "Backup saved to $backupFile" } else { Write-Output "Nothing existing to back up." }`);
-    blank();
-  }
 
   // New-Item -Force is idempotent for registry keys: it creates missing parents
   // and is a safe no-op on keys that already exist (it never wipes them). So one
@@ -302,7 +203,6 @@ export function generateRemediationScript(
 export function generateDetectionScript(
   changes: RegistryChange[],
   profileName?: string,
-  reversal = false,
 ): string {
   const now = new Date().toISOString();
   const profile = profileName || 'RegBuddy';
@@ -312,10 +212,10 @@ export function generateDetectionScript(
   const blank = () => L.push('');
 
   line(`<#`);
-  line(`  RegBuddy ${reversal ? 'Restore ' : ''}Detection Script`);
+  line(`  RegBuddy Detection Script`);
   line(`  Generated: ${now}`);
   line(`  Profile: ${profile}`);
-  line(`  Verifies the ${reversal ? 'restore is' : 'changes are'} applied. exit 0 = compliant, exit 1 = run ${reversal ? 'restore' : 'remediation'}`);
+  line(`  Verifies the changes are applied. exit 0 = compliant, exit 1 = run remediation`);
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
