@@ -480,7 +480,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
                   <DownloadIcon />
                   Upload backup .reg…
                 </button>
-                <span className="confirmPage-restore-hint">Select all <code>.reg</code> files in that folder.</span>
+                <span className="confirmPage-restore-hint">Upload the <code>backup.reg</code> from that folder.</span>
               </div>
             )}
           </div>

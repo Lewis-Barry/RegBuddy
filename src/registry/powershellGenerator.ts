@@ -141,8 +141,8 @@ export function generateRemediationScript(
   line(`  Profile: ${profile}`);
   line(`  Changes: ${changes.length}`);
   if (reversal) line(`  Note: restores the affected keys to the uploaded backup snapshot and removes what was added.`);
-  line(`  Backup: every affected key is exported (BEFORE any change) to %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp>,`);
-  line(`          or %TEMP% if that isn't writable. The exact path is printed at runtime. Roll back with  reg import <file>.`);
+  line(`  Backup: affected keys are exported (BEFORE any change) to a single backup.reg under`);
+  line(`          %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp> (or %TEMP% if not writable). Path printed at runtime; roll back with  reg import.`);
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
@@ -166,10 +166,26 @@ export function generateRemediationScript(
     line(`    $backupDir = Join-Path $env:TEMP "RegBuddy\\${safeProfile}-$ts"`);
     line(`    New-Item -Path $backupDir -ItemType Directory -Force | Out-Null`);
     line(`}`);
+    line(`$backupFile = Join-Path $backupDir 'backup.reg'`);
+    line(`# Export each top-level key to a temp file, then merge into one backup.reg`);
+    line(`# (reg export can't append; drop the repeated header on all but the first).`);
+    line(`$keys = @(`);
     backupKeys.forEach((k, i) => {
-      line(`reg export "${k}" "$backupDir\\${String(i + 1).padStart(2, '0')}.reg" /y *> $null`);
+      line(`    '${q(k)}'${i < backupKeys.length - 1 ? ',' : ''}`);
     });
-    line(`Write-Output "Backup saved to $backupDir"`);
+    line(`)`);
+    line(`$first = $true`);
+    line(`foreach ($key in $keys) {`);
+    line(`    $tmp = New-TemporaryFile`);
+    line(`    reg export $key $tmp.FullName /y *> $null`);
+    line(`    $lines = Get-Content -LiteralPath $tmp.FullName -Encoding Unicode`);
+    line(`    Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue`);
+    line(`    if (-not $lines) { continue }   # key didn't exist — nothing to back up`);
+    line(`    if (-not $first) { $lines = $lines | Select-Object -Skip 1 }`);
+    line(`    Add-Content -LiteralPath $backupFile -Value $lines -Encoding Unicode`);
+    line(`    $first = $false`);
+    line(`}`);
+    line(`if (Test-Path $backupFile) { Write-Output "Backup saved to $backupFile" } else { Write-Output "No existing keys to back up." }`);
     blank();
   }
 
