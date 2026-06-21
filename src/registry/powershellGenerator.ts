@@ -60,6 +60,13 @@ function q(s: string) {
   return s.replace(/'/g, "''");
 }
 
+// New-Item has no -LiteralPath, so its -Path treats *, ?, [ ] as wildcards — a
+// key literally named '*' (e.g. HKCR\*) would expand against the whole hive and
+// hang. Backtick-escape the metacharacters so they're matched literally.
+function psWildcardEscape(s: string): string {
+  return s.replace(/[*?[\]`]/g, '`$&');
+}
+
 /**
  * Reduce a list of key paths to the minimal set worth creating: strip trailing
  * separators, dedupe, and drop any path that is an ancestor of another —
@@ -192,7 +199,7 @@ export function generateRemediationScript(
   if (keysToCreate.length > 0) {
     line(`# --- Create Keys ---`);
     for (const path of keysToCreate) {
-      line(`New-Item -Path '${q(toPsPath(path))}' -Force | Out-Null`);
+      line(`New-Item -Path '${q(psWildcardEscape(toPsPath(path)))}' -Force | Out-Null`);
     }
     blank();
   }
@@ -207,7 +214,7 @@ export function generateRemediationScript(
       if (name === '') {
         line(`Set-Item -LiteralPath '${q(psPath)}' -Value ${psData(type, data)} -Force`);
       } else {
-        line(`Set-ItemProperty -Path '${q(psPath)}' -Name '${q(name)}' -Value ${psData(type, data)} -Type ${psType(type)} -Force`);
+        line(`Set-ItemProperty -LiteralPath '${q(psPath)}' -Name '${q(name)}' -Value ${psData(type, data)} -Type ${psType(type)} -Force`);
       }
     }
     blank();
@@ -217,7 +224,7 @@ export function generateRemediationScript(
     line(`# --- Delete Values ---`);
     for (const c of delValues) {
       const name = c.valueName ?? '';
-      line(`Remove-ItemProperty -Path '${q(toPsPath(c.path))}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
+      line(`Remove-ItemProperty -LiteralPath '${q(toPsPath(c.path))}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
     }
     blank();
   }
@@ -225,7 +232,7 @@ export function generateRemediationScript(
   if (delKeys.length > 0) {
     line(`# --- Delete Keys ---`);
     for (const c of delKeys) {
-      line(`Remove-Item -Path '${q(toPsPath(c.path))}' -Recurse -Force -ErrorAction SilentlyContinue`);
+      line(`Remove-Item -LiteralPath '${q(toPsPath(c.path))}' -Recurse -Force -ErrorAction SilentlyContinue`);
     }
     blank();
   }
@@ -233,7 +240,7 @@ export function generateRemediationScript(
   if (renKeys.length > 0) {
     line(`# --- Rename Keys ---`);
     for (const c of renKeys) {
-      line(`Rename-Item -Path '${q(toPsPath(c.path))}' -NewName '${q(c.newName ?? '')}' -Force`);
+      line(`Rename-Item -LiteralPath '${q(toPsPath(c.path))}' -NewName '${q(c.newName ?? '')}' -Force`);
     }
     blank();
   }
@@ -241,7 +248,7 @@ export function generateRemediationScript(
   if (renValues.length > 0) {
     line(`# --- Rename Values ---`);
     for (const c of renValues) {
-      line(`Rename-ItemProperty -Path '${q(toPsPath(c.path))}' -Name '${q(c.valueName ?? '')}' -NewName '${q(c.newName ?? '')}' -Force`);
+      line(`Rename-ItemProperty -LiteralPath '${q(toPsPath(c.path))}' -Name '${q(c.valueName ?? '')}' -NewName '${q(c.newName ?? '')}' -Force`);
     }
     blank();
   }
@@ -287,7 +294,7 @@ export function generateDetectionScript(
 
   // Check that added keys exist (deepest key implies its parents)
   for (const path of minimalKeyPaths(addKeys.map((c) => c.path))) {
-    line(`if (-not (Test-Path '${q(toPsPath(path))}')) { $allGood = $false }`);
+    line(`if (-not (Test-Path -LiteralPath '${q(toPsPath(path))}')) { $allGood = $false }`);
   }
   if (addKeys.length > 0) blank();
 
@@ -304,7 +311,7 @@ export function generateDetectionScript(
       // Default value check
       line(`    $val = (Get-Item -LiteralPath '${q(psPath)}' -ErrorAction Stop).GetValue('')`);
     } else {
-      line(`    $val = Get-ItemPropertyValue -Path '${q(psPath)}' -Name '${q(name)}' -ErrorAction Stop`);
+      line(`    $val = Get-ItemPropertyValue -LiteralPath '${q(psPath)}' -Name '${q(name)}' -ErrorAction Stop`);
     }
 
     // Comparison depends on type
@@ -341,14 +348,14 @@ export function generateDetectionScript(
   for (const c of delValues) {
     const psPath = toPsPath(c.path);
     const name   = c.valueName ?? '';
-    line(`$exists = Get-ItemProperty -Path '${q(psPath)}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
+    line(`$exists = Get-ItemProperty -LiteralPath '${q(psPath)}' -Name '${q(name || '(Default)')}' -ErrorAction SilentlyContinue`);
     line(`if ($null -ne $exists) { $allGood = $false }`);
     blank();
   }
 
   // Check that deleted keys no longer exist
   for (const c of delKeys) {
-    line(`if (Test-Path '${q(toPsPath(c.path))}') { $allGood = $false }`);
+    line(`if (Test-Path -LiteralPath '${q(toPsPath(c.path))}') { $allGood = $false }`);
   }
   if (delKeys.length > 0) blank();
 
@@ -356,8 +363,8 @@ export function generateDetectionScript(
   for (const c of renKeys) {
     const parentPath = c.path.substring(0, c.path.lastIndexOf('\\'));
     const newPath = parentPath ? parentPath + '\\' + (c.newName ?? '') : (c.newName ?? '');
-    line(`if (Test-Path '${q(toPsPath(c.path))}') { $allGood = $false }`);
-    line(`if (-not (Test-Path '${q(toPsPath(newPath))}')) { $allGood = $false }`);
+    line(`if (Test-Path -LiteralPath '${q(toPsPath(c.path))}') { $allGood = $false }`);
+    line(`if (-not (Test-Path -LiteralPath '${q(toPsPath(newPath))}')) { $allGood = $false }`);
     blank();
   }
 
@@ -366,10 +373,10 @@ export function generateDetectionScript(
     const psPath = toPsPath(c.path);
     const oldName = c.valueName ?? '';
     const newName = c.newName ?? '';
-    line(`$old = Get-ItemProperty -Path '${q(psPath)}' -Name '${q(oldName)}' -ErrorAction SilentlyContinue`);
+    line(`$old = Get-ItemProperty -LiteralPath '${q(psPath)}' -Name '${q(oldName)}' -ErrorAction SilentlyContinue`);
     line(`if ($null -ne $old) { $allGood = $false }`);
     line(`try {`);
-    line(`    $null = Get-ItemPropertyValue -Path '${q(psPath)}' -Name '${q(newName)}' -ErrorAction Stop`);
+    line(`    $null = Get-ItemPropertyValue -LiteralPath '${q(psPath)}' -Name '${q(newName)}' -ErrorAction Stop`);
     line(`} catch { $allGood = $false }`);
     blank();
   }
