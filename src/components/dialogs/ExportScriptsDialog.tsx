@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
 import { RegistryChange } from '../../registry/types';
-import { parseRegFile } from '../../registry/parser';
+import { parseRegFile, readRegFile } from '../../registry/parser';
 import {
   generateRemediationScript,
   generateDetectionScript,
@@ -154,7 +154,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     // Concatenate all selected .reg files — parseRegFile ignores repeated headers.
-    const texts = await Promise.all(files.map((f) => f.text()));
+    const texts = await Promise.all(files.map((f) => readRegFile(f)));
     setBackupContent(texts.join('\n'));
     setBackupName(files.length === 1 ? files[0].name : `${files.length} files`);
     e.target.value = '';

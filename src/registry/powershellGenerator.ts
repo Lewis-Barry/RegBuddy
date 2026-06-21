@@ -144,13 +144,29 @@ export function generateRemediationScript(
   // `reg export <key>` already captures that key's subtree; collapsing to
   // ancestors would export huge unrelated trees. add-key paths are new, so
   // there's nothing to back up for them.
-  const backupKeys = [
-    ...new Set(
-      changes.filter((c) => c.type !== 'add-key').map((c) => cleanPath(c.path)).filter(Boolean),
-    ),
-  ].sort();
-  if (includeBackup && backupKeys.length > 0) {
-    line(`# --- Backup affected keys (rollback safety net) ---`);
+  // Back up only the data about to be manipulated. `reg export <key>` always
+  // dumps the key's whole subtree, so for value changes we filter its output
+  // down to just the touched value lines. Deleted/renamed keys keep the full
+  // subtree (it's all being manipulated). add-key/add-value have no prior state.
+  const specMap = new Map<string, { whole: boolean; values: Set<string> }>();
+  const getSpec = (key: string) => {
+    let s = specMap.get(key);
+    if (!s) { s = { whole: false, values: new Set<string>() }; specMap.set(key, s); }
+    return s;
+  };
+  for (const c of changes) {
+    const key = cleanPath(c.path);
+    if (!key) continue;
+    if (c.type === 'delete-key' || c.type === 'rename-key') getSpec(key).whole = true;
+    else if (c.type === 'modify-value' || c.type === 'delete-value' || c.type === 'rename-value')
+      getSpec(key).values.add(c.valueName ?? '');
+  }
+  const backupSpecs = [...specMap.entries()]
+    .filter(([, s]) => s.whole || s.values.size > 0)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (includeBackup && backupSpecs.length > 0) {
+    line(`# --- Backup the data we're about to change (rollback safety net) ---`);
     line(`$ts = Get-Date -Format 'yyyyMMdd-HHmmss'`);
     line(`# Prefer ProgramData (machine-wide, admin-retrievable). A standard-user run`);
     line(`# may be denied there if the folder is SYSTEM-owned, so fall back to TEMP.`);
@@ -162,25 +178,52 @@ export function generateRemediationScript(
     line(`    New-Item -Path $backupDir -ItemType Directory -Force | Out-Null`);
     line(`}`);
     line(`$backupFile = Join-Path $backupDir 'backup.reg'`);
-    line(`# Export each touched key to a temp file, then merge into one backup.reg`);
-    line(`# (reg export can't append; drop the repeated header on all but the first).`);
-    line(`$keys = @(`);
-    backupKeys.forEach((k, i) => {
-      line(`    '${q(k)}'${i < backupKeys.length - 1 ? ',' : ''}`);
+    line(`# Per key: Values=$null means keep the whole exported subtree (key is being`);
+    line(`# deleted/renamed); otherwise keep only the listed value names.`);
+    line(`$backupSpec = @(`);
+    backupSpecs.forEach(([key, s]) => {
+      const vals = s.whole
+        ? '$null'
+        : `@(${[...s.values].map((v) => `'${q(v)}'`).join(', ')})`;
+      line(`    @{ Key = '${q(key)}'; Values = ${vals} }`);
     });
     line(`)`);
-    line(`$first = $true`);
-    line(`foreach ($key in $keys) {`);
+    // Write one valid .reg header up front, then append each filtered block.
+    line(`Set-Content -LiteralPath $backupFile -Value 'Windows Registry Editor Version 5.00' -Encoding Unicode`);
+    line(`Add-Content -LiteralPath $backupFile -Value '' -Encoding Unicode`);
+    line(`$wrote = 0`);
+    line(`foreach ($spec in $backupSpec) {`);
     line(`    $tmp = New-TemporaryFile`);
-    line(`    reg export $key $tmp.FullName /y *> $null`);
-    line(`    $lines = Get-Content -LiteralPath $tmp.FullName -Encoding Unicode`);
+    line(`    reg export $spec.Key $tmp.FullName /y *> $null`);
+    line(`    $raw = Get-Content -LiteralPath $tmp.FullName -Encoding Unicode`);
     line(`    Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue`);
-    line(`    if (-not $lines) { continue }   # key did not exist, nothing to back up`);
-    line(`    if (-not $first) { $lines = $lines | Select-Object -Skip 1 }`);
-    line(`    Add-Content -LiteralPath $backupFile -Value $lines -Encoding Unicode`);
-    line(`    $first = $false`);
+    line(`    if (-not $raw) { continue }   # key does not exist, nothing to back up`);
+    line(`    if ($null -eq $spec.Values) {`);
+    line(`        $block = $raw | Select-Object -Skip 1   # whole subtree, minus the version header`);
+    line(`    } else {`);
+    line(`        $block = @(); $cur = ''; $keepVal = $false`);
+    line(`        foreach ($ln in $raw) {`);
+    line(`            if ($ln -match '^\\[(.+)\\]\\s*$') {            # section header [key]`);
+    line(`                $cur = $matches[1]`);
+    line(`                if ($cur -ieq $spec.Key) { $block += $ln }  # keep the target key's header`);
+    line(`                $keepVal = $false; continue`);
+    line(`            }`);
+    line(`            if ($cur -ine $spec.Key) { continue }           # skip subkeys' values`);
+    line(`            if ($ln -match '^\\s') { if ($keepVal) { $block += $ln }; continue }  # hex continuation`);
+    line(`            $vn = $null`);
+    line(`            if ($ln -match '^@=') { $vn = '' }`);
+    line(`            elseif ($ln -match '^"((?:[^"\\\\]|\\\\.)*)"=') { $vn = $matches[1] -replace '\\\\(.)','$1' }`);
+    line(`            # keep matching values; fail safe by keeping anything we can't parse`);
+    line(`            $keepVal = ($null -ne $vn -and $spec.Values -contains $vn) -or ($null -eq $vn -and $ln.Trim())`);
+    line(`            if ($keepVal) { $block += $ln }`);
+    line(`        }`);
+    line(`        if ($block.Count -le 1) { continue }   # only the header survived → nothing to restore`);
+    line(`    }`);
+    line(`    Add-Content -LiteralPath $backupFile -Value $block -Encoding Unicode`);
+    line(`    Add-Content -LiteralPath $backupFile -Value '' -Encoding Unicode`);
+    line(`    $wrote++`);
     line(`}`);
-    line(`if (Test-Path $backupFile) { Write-Output "Backup saved to $backupFile" } else { Write-Output "No existing keys to back up." }`);
+    line(`if ($wrote -gt 0) { Write-Output "Backup saved to $backupFile" } else { Write-Output "Nothing existing to back up." }`);
     blank();
   }
 
