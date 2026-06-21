@@ -2,28 +2,17 @@ import { RegistryChange, RegistryValueType } from './types';
 
 // ── Hive path mapping ────────────────────────────────────────────────────────
 
-const HIVE_MAP: [string, string][] = [
-  ['HKEY_LOCAL_MACHINE', 'HKLM:'],
-  ['HKEY_CURRENT_USER',  'HKCU:'],
-  ['HKEY_CLASSES_ROOT',  'HKCR:'],
-  ['HKEY_USERS',         'HKU:'],
-  ['HKEY_CURRENT_CONFIG','HKCC:'],
-];
-
 /** Collapse repeated separators and strip any trailing separator. */
 function cleanPath(p: string): string {
   return p.replace(/\\{2,}/g, '\\').replace(/\\+$/, '');
 }
 
+// ponytail: use the Registry:: provider prefix, not drive aliases (HKLM:, HKCU:…).
+// PowerShell only mounts HKLM: and HKCU: by default — HKCR:/HKU:/HKCC: don't
+// exist, so drive-qualified paths to those hives fail with DriveNotFound.
+// Registry::HKEY_* works for every hive with no PSDrive setup.
 function toPsPath(regPath: string): string {
-  const path = cleanPath(regPath);
-  for (const [hive, alias] of HIVE_MAP) {
-    if (path === hive) return alias;
-    if (path.startsWith(hive + '\\')) {
-      return alias + '\\' + path.slice(hive.length + 1);
-    }
-  }
-  return path;
+  return 'Registry::' + cleanPath(regPath);
 }
 
 function psType(type: RegistryValueType): string {
