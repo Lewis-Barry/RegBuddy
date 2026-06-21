@@ -346,7 +346,11 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
           newData: data,
           timestamp: Date.now(),
         };
-        const changes = [...state.changes, change];
+        // Replace any existing change for this value so adding twice doesn't duplicate
+        const filtered = state.changes.filter(
+          (c) => !(c.path === path && c.valueName === name),
+        );
+        const changes = [...filtered, change];
         return { changes, mergedTree: applyChanges(state.baseline, changes) };
       }),
 
@@ -558,12 +562,16 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
         );
 
         if (isNewValue) {
-          const changes = state.changes.map((c) => {
-            if (c.type === 'add-value' && c.path === path && c.valueName === oldName) {
-              return { ...c, valueName: newName };
-            }
-            return c;
-          });
+          const changes = state.changes
+            // Drop any existing change already at the target name so renaming
+            // two new values to the same name doesn't leave duplicates
+            .filter((c) => !(c.path === path && c.valueName === newName))
+            .map((c) => {
+              if (c.type === 'add-value' && c.path === path && c.valueName === oldName) {
+                return { ...c, valueName: newName };
+              }
+              return c;
+            });
           return {
             changes,
             mergedTree: applyChanges(state.baseline, changes),

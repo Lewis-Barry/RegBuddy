@@ -78,15 +78,6 @@
   z-index: 10;
 }
 
-.addressBar-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-}
-
 .addressBar-path {
   flex: 1;
   min-width: 0;

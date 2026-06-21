@@ -143,18 +143,6 @@ export const AddressBar: React.FC<AddressBarProps> = ({ showTip, onCloseTip }) =
 
   return (
     <div className="addressBar">
-      <span className="addressBar-icon" title="Registry path">
-        {/* small folder/key icon */}
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path
-            d="M1 3.5A1.5 1.5 0 012.5 2h3.379a1.5 1.5 0 011.06.44L8.062 3.56A.5.5 0 008.415 3.7H13.5A1.5 1.5 0 0115 5.2v7.3a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z"
-            fill="#dcb67a"
-            stroke="#c4a05a"
-            strokeWidth=".5"
-          />
-        </svg>
-      </span>
-
       {editing ? (
         <input
           ref={inputRef}
