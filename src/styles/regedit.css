@@ -218,8 +218,8 @@
 }
 
 .path-tip-icon {
-  font-size: 14px;
   flex-shrink: 0;
+  color: #6b5a10;
 }
 
 .path-tip-close {
