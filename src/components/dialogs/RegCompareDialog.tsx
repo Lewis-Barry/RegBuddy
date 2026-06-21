@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { parseRegFile } from '../../registry/parser';
+import { parseRegFile, readRegFile } from '../../registry/parser';
 import { diffRegTrees, RegDiffEntry, RegDiffType } from '../../registry/compare';
 import {
   generateRemediationScript,
@@ -86,7 +86,7 @@ const FileCard: React.FC<FileCardProps> = ({ role, fileName, keyCount, onLoad, o
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const text = await file.text();
+      const text = await readRegFile(file);
       onLoad(text, file.name);
       e.target.value = '';
     },

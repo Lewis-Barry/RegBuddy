@@ -16,6 +16,26 @@
 
 import { RegistryKey, RegistryValue, RegistryValueType, ROOT_HIVES } from './types';
 
+// ── File reading ──
+
+/**
+ * Read a .reg file with the correct text encoding. regedit exports "Version 5.00"
+ * files as UTF-16 LE with a BOM; older "REGEDIT4" files are ANSI/UTF-8. Blob.text()
+ * always assumes UTF-8, which turns a UTF-16 export into garbage (and downstream
+ * throws). Sniff the BOM and decode accordingly.
+ */
+export async function readRegFile(file: Blob): Promise<string> {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf[0] === 0xff && buf[1] === 0xfe) return decode(buf, 'utf-16le');
+  if (buf[0] === 0xfe && buf[1] === 0xff) return decode(buf, 'utf-16be');
+  return decode(buf, 'utf-8');
+}
+
+function decode(buf: Uint8Array, label: string): string {
+  // ignoreBOM:false strips the BOM for us.
+  return new TextDecoder(label, { ignoreBOM: false }).decode(buf);
+}
+
 // ── Helpers ──
 
 function unescapeRegString(s: string): string {
@@ -28,8 +48,10 @@ function hexToString(hexCsv: string): string {
     .map((b) => b.trim())
     .filter(Boolean)
     .map((b) => parseInt(b, 16));
-  // UTF-16LE decoding (used by hex(2) and hex(7))
-  const u16 = new Uint16Array(new Uint8Array(bytes).buffer);
+  // UTF-16LE decoding (used by hex(2) and hex(7)). Pad to an even byte count —
+  // Uint16Array throws on an odd-length buffer, and that throw would escape render.
+  const even = bytes.length % 2 === 0 ? bytes : [...bytes, 0];
+  const u16 = new Uint16Array(new Uint8Array(even).buffer);
   return Array.from(u16)
     .map((c) => (c === 0 ? '' : String.fromCharCode(c)))
     .join('');

@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useRegBuddyStore } from '../../store/regBuddyStore';
 import { RegistryValueType } from '../../registry/types';
+import { readRegFile } from '../../registry/parser';
 
 interface MenuBarProps {
   onGetScripts?: () => void;
@@ -38,7 +39,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({ onGetScripts, onCompare, onRes
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const text = await file.text();
+      const text = await readRegFile(file);
       importRegAsChanges(text);
       e.target.value = '';
     },
