@@ -184,6 +184,61 @@
   color: var(--text-primary);
 }
 
+/* Windows XP-style yellow balloon tip, pointing up at the address input */
+.path-tip {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 36px;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 9px 30px 9px 12px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #3a2f00;
+  background: linear-gradient(#fffce0, #ffe98a);
+  border: 1px solid #d9b84a;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.path-tip::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 18px;
+  width: 12px;
+  height: 12px;
+  background: #fffce0;
+  border-left: 1px solid #d9b84a;
+  border-top: 1px solid #d9b84a;
+  transform: rotate(45deg);
+}
+
+.path-tip-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.path-tip-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  border: none;
+  background: none;
+  padding: 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: #6b5a10;
+  cursor: pointer;
+}
+
+.path-tip-close:hover {
+  color: #000;
+}
+
 /* ── Main content area ── */
 
 .mainContent {

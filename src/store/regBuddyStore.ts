@@ -22,6 +22,30 @@ function cloneTree(node: RegistryKey): RegistryKey {
   };
 }
 
+/**
+ * Walk `parts` from the Computer root, matching existing child keys
+ * case-insensitively (registry keys are case-insensitive). Returns the segments
+ * using each existing key's canonical casing, and the typed casing for any
+ * segment that doesn't exist yet.
+ */
+function canonicalizeParts(root: RegistryKey, parts: string[]): string[] {
+  const out: string[] = [];
+  let current: RegistryKey | null = root;
+  for (const seg of parts) {
+    const match: RegistryKey | undefined = current?.children.find(
+      (c) => c.name.toLowerCase() === seg.toLowerCase(),
+    );
+    if (match) {
+      out.push(match.name);
+      current = match;
+    } else {
+      out.push(seg);
+      current = null;
+    }
+  }
+  return out;
+}
+
 /** Ensure a key exists at path, creating intermediate keys as needed */
 function ensureKey(root: RegistryKey, path: string): RegistryKey {
   const existing = findKey(root, path);
@@ -243,7 +267,9 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
 
     createAndNavigateTo: (path) =>
       set((state) => {
-        const parts = path.split('\\');
+        // Reuse the casing of keys that already exist so a pasted "Software"
+        // resolves to the existing "SOFTWARE" instead of creating a duplicate.
+        const parts = canonicalizeParts(state.mergedTree, path.split('\\'));
         const newChanges: RegistryChange[] = [];
         // Add an add-key change for every segment that doesn't exist yet
         for (let i = 1; i <= parts.length; i++) {
@@ -270,7 +296,7 @@ export const useRegBuddyStore = create<RegBuddyState>((set, get) => {
           changes,
           mergedTree: applyChanges(state.baseline, changes),
           expandedNodes: next,
-          selectedPath: path,
+          selectedPath: parts.join('\\'),
         };
       }),
 

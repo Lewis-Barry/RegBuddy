@@ -35,7 +35,12 @@ function isValidHive(path: string): boolean {
   return (ROOT_HIVES as readonly string[]).includes(hive);
 }
 
-export const AddressBar: React.FC = () => {
+interface AddressBarProps {
+  showTip?: boolean;
+  onCloseTip?: () => void;
+}
+
+export const AddressBar: React.FC<AddressBarProps> = ({ showTip, onCloseTip }) => {
   const selectedPath = useRegBuddyStore((s) => s.selectedPath);
   const mergedTree   = useRegBuddyStore((s) => s.mergedTree);
   const expandTo     = useRegBuddyStore((s) => s.expandTo);
@@ -48,18 +53,22 @@ export const AddressBar: React.FC = () => {
   const [copied, setCopied]       = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  /** Walk the merged tree to check if a path node exists */
-  const pathExists = useCallback(
-    (path: string) => {
-      // 'Computer' is always the virtual root
-      if (path === 'Computer') return true;
+  /**
+   * Resolve a path against the merged tree case-insensitively. Returns the path
+   * with each existing key's canonical casing, or null if it doesn't fully exist.
+   */
+  const resolvePath = useCallback(
+    (path: string): string | null => {
+      if (path === 'Computer') return 'Computer';
       let node = mergedTree;
+      const canon: string[] = [];
       for (const seg of path.split('\\')) {
         const child = node.children.find((c) => c.name.toLowerCase() === seg.toLowerCase());
-        if (!child) return false;
+        if (!child) return null;
+        canon.push(child.name);
         node = child;
       }
-      return true;
+      return canon.join('\\');
     },
     [mergedTree],
   );
@@ -86,9 +95,10 @@ export const AddressBar: React.FC = () => {
           return;
         }
 
-        if (pathExists(path)) {
-          expandTo(path);
-          selectKey(path);
+        const canonical = resolvePath(path);
+        if (canonical) {
+          expandTo(canonical);
+          selectKey(canonical);
           setEditing(false);
         } else if (!isValidHive(path)) {
           // Not a valid hive at all — just close
@@ -110,7 +120,7 @@ export const AddressBar: React.FC = () => {
         setNotFound(false);
       }
     },
-    [editValue, notFound, pathExists, expandTo, selectKey, createAndNavigateTo],
+    [editValue, notFound, resolvePath, expandTo, selectKey, createAndNavigateTo],
   );
 
   const handleCopy = useCallback(async () => {
@@ -195,6 +205,16 @@ export const AddressBar: React.FC = () => {
           </svg>
         )}
       </button>
+
+      {showTip && (
+        <div className="path-tip" role="status">
+          <span className="path-tip-icon" aria-hidden="true">💡</span>
+          <span>Paste a new path here to create it</span>
+          <button className="path-tip-close" onClick={onCloseTip} aria-label="Dismiss tip">
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 };

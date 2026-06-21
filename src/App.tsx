@@ -12,6 +12,7 @@ import { WelcomeModal } from './components/dialogs/WelcomeModal';
 import { AboutModal } from './components/dialogs/AboutModal';
 
 const WELCOME_KEY = 'regbuddy-welcome-seen';
+const PATH_TIP_KEY = 'regbuddy-pathtip-seen';
 
 const App: React.FC = () => {
   const [showExport, setShowExport]   = useState(false);
@@ -19,6 +20,10 @@ const App: React.FC = () => {
   const [showCompare, setShowCompare] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [showAbout, setShowAbout]     = useState(false);
+  const [showPathTip, setShowPathTip] = useState(() => !localStorage.getItem(PATH_TIP_KEY));
+
+  const dismissPathTip = () => { localStorage.setItem(PATH_TIP_KEY, '1'); setShowPathTip(false); };
+  const handleShowWelcome = () => { setShowWelcome(true); setShowPathTip(true); };
 
   const handleGetScripts  = () => { setShowCompare(false); setExportRestore(false); setShowExport(true); };
   const handleRestore     = () => { setShowCompare(false); setExportRestore(true);  setShowExport(true); };
@@ -30,8 +35,8 @@ const App: React.FC = () => {
 
   return (
     <div className="regedit" style={{ position: 'relative' }}>
-      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} onRestore={handleRestore} onAbout={() => setShowAbout(true)} onShowWelcome={() => setShowWelcome(true)} />
-      <AddressBar />
+      <MenuBar onGetScripts={handleGetScripts} onCompare={handleCompare} onRestore={handleRestore} onAbout={() => setShowAbout(true)} onShowWelcome={handleShowWelcome} />
+      <AddressBar showTip={showPathTip && !showWelcome} onCloseTip={dismissPathTip} />
       <SplitPane
         left={<TreePanel />}
         right={<ValuePanel />}
