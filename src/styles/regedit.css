@@ -980,6 +980,21 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
+  cursor: pointer;
+}
+
+.export-safety-header input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.export-safety.off {
+  border-color: var(--border-default);
+  background: var(--bg-surface-secondary);
+}
+
+.export-safety.off .export-safety-header {
+  color: var(--text-secondary);
 }
 
 .export-safety-text {

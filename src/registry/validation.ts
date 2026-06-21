@@ -71,7 +71,7 @@ function validateRegExpandSz(data: string): ValidationResult {
   if (pctCount % 2 !== 0) {
     return {
       valid: true,
-      warning: 'Unpaired "%" detected — environment variable references should use %VAR_NAME% syntax.',
+      warning: 'Unpaired "%" detected. Environment variable references should use %VAR_NAME% syntax.',
     };
   }
 
@@ -100,7 +100,7 @@ function validateRegMultiSz(data: string): ValidationResult {
     const plural = emptyLineIndices.length > 1;
     return {
       valid: false,
-      error: `Empty string${plural ? 's' : ''} at line${plural ? 's' : ''} ${emptyLineIndices.join(', ')} — a zero-length string terminates a REG_MULTI_SZ sequence and cannot appear in the middle.`,
+      error: `Empty string${plural ? 's' : ''} at line${plural ? 's' : ''} ${emptyLineIndices.join(', ')}. A zero-length string terminates a REG_MULTI_SZ sequence and cannot appear in the middle.`,
     };
   }
 
@@ -205,7 +205,7 @@ function validateRegBinary(data: string): ValidationResult {
   if (cleaned.length % 2 !== 0) {
     return {
       valid: true,
-      warning: `Odd number of hex digits (${cleaned.length}) — binary data should be entered as complete byte pairs (e.g. "0A FF 3C").`,
+      warning: `Odd number of hex digits (${cleaned.length}). Binary data should be entered as complete byte pairs (e.g. "0A FF 3C").`,
     };
   }
 
@@ -265,7 +265,7 @@ export function getTypeDescription(type: RegistryValueType): string {
     case 'REG_BINARY':
       return 'Binary data entered as hexadecimal byte pairs (e.g. 0A FF 3C).';
     case 'REG_NONE':
-      return 'No defined value type — any data is accepted.';
+      return 'No defined value type. Any data is accepted.';
     default:
       return '';
   }

@@ -49,7 +49,7 @@ const features = [
       </svg>
     ),
     title: 'Safe Restore',
-    desc: 'Every remediation script first backs up the keys it touches on the device. If a change goes wrong, Restore mode turns that backup into an exact rollback script — returning the device to its real prior state, not a guess.',
+    desc: 'Every remediation script first backs up the keys it touches on the device. If a change goes wrong, Restore mode turns that backup into an exact rollback script that returns the device to its real prior state, not a guess.',
   },
 ];
 

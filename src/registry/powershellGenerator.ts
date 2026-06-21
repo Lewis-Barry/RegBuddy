@@ -118,6 +118,7 @@ export function generateRemediationScript(
   changes: RegistryChange[],
   profileName?: string,
   reversal = false,
+  includeBackup = true,
 ): string {
   const now = new Date().toISOString();
   const profile = profileName || 'RegBuddy';
@@ -141,8 +142,10 @@ export function generateRemediationScript(
   line(`  Profile: ${profile}`);
   line(`  Changes: ${changes.length}`);
   if (reversal) line(`  Note: restores the affected keys to the uploaded backup snapshot and removes what was added.`);
-  line(`  Backup: affected keys are exported (BEFORE any change) to a single backup.reg under`);
-  line(`          %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp> (or %TEMP% if not writable). Path printed at runtime; roll back with  reg import.`);
+  if (includeBackup) {
+    line(`  Backup: affected keys are exported (BEFORE any change) to a single backup.reg under`);
+    line(`          %ProgramData%\\RegBuddy\\${safeProfile}-<timestamp> (or %TEMP% if not writable). Path printed at runtime; roll back with  reg import.`);
+  }
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);
@@ -154,11 +157,11 @@ export function generateRemediationScript(
   // including data RegBuddy never modelled. Keys that don't exist yet simply
   // produce no backup (reg export is best-effort here).
   const backupKeys = topLevelKeyPaths(changes.map((c) => c.path));
-  if (backupKeys.length > 0) {
+  if (includeBackup && backupKeys.length > 0) {
     line(`# --- Backup affected keys (rollback safety net) ---`);
     line(`$ts = Get-Date -Format 'yyyyMMdd-HHmmss'`);
     line(`# Prefer ProgramData (machine-wide, admin-retrievable). A standard-user run`);
-    line(`# may be denied there if the folder is SYSTEM-owned — fall back to TEMP.`);
+    line(`# may be denied there if the folder is SYSTEM-owned, so fall back to TEMP.`);
     line(`$backupDir = Join-Path $env:ProgramData "RegBuddy\\${safeProfile}-$ts"`);
     line(`try {`);
     line(`    New-Item -Path $backupDir -ItemType Directory -Force -ErrorAction Stop | Out-Null`);
@@ -180,7 +183,7 @@ export function generateRemediationScript(
     line(`    reg export $key $tmp.FullName /y *> $null`);
     line(`    $lines = Get-Content -LiteralPath $tmp.FullName -Encoding Unicode`);
     line(`    Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue`);
-    line(`    if (-not $lines) { continue }   # key didn't exist — nothing to back up`);
+    line(`    if (-not $lines) { continue }   # key did not exist, nothing to back up`);
     line(`    if (-not $first) { $lines = $lines | Select-Object -Skip 1 }`);
     line(`    Add-Content -LiteralPath $backupFile -Value $lines -Encoding Unicode`);
     line(`    $first = $false`);
@@ -276,7 +279,7 @@ export function generateDetectionScript(
   line(`  RegBuddy ${reversal ? 'Restore ' : ''}Detection Script`);
   line(`  Generated: ${now}`);
   line(`  Profile: ${profile}`);
-  line(`  Verifies the ${reversal ? 'restore is' : 'changes are'} applied — exit 0 = compliant, exit 1 = run ${reversal ? 'restore' : 'remediation'}`);
+  line(`  Verifies the ${reversal ? 'restore is' : 'changes are'} applied. exit 0 = compliant, exit 1 = run ${reversal ? 'restore' : 'remediation'}`);
   line(`#>`);
   blank();
   line(`#Requires -Version 5.1`);

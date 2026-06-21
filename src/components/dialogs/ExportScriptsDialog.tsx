@@ -142,9 +142,10 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
   const [copiedTab, setCopiedTab] = useState<ScriptTab | null>(null);
   const [changesCollapsed, setChangesCollapsed] = useState(false);
   const [restoreMode, setRestoreMode] = useState(initialRestore);
+  const [includeBackup, setIncludeBackup] = useState(true);
 
-  // Restore mode returns the device to an uploaded backup snapshot — the .reg
-  // the remediation script captured before applying changes. No backup → no script.
+  // Restore mode returns the device to an uploaded backup snapshot: the .reg
+  // the remediation script captured before applying changes. No backup, no script.
   const [backupName, setBackupName] = useState<string | null>(null);
   const [backupContent, setBackupContent] = useState<string | null>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
@@ -170,8 +171,8 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
   const activeChanges = restoreMode ? restoreChanges : changes;
 
   const remediationScript = useMemo(
-    () => generateRemediationScript(activeChanges, profileName, restoreMode),
-    [activeChanges, profileName, restoreMode],
+    () => generateRemediationScript(activeChanges, profileName, restoreMode, includeBackup),
+    [activeChanges, profileName, restoreMode, includeBackup],
   );
   const detectionScript = useMemo(
     () => generateDetectionScript(activeChanges, profileName, restoreMode),
@@ -287,7 +288,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
           <button
             className={`confirmPage-reversal-btn${restoreMode ? ' active' : ''}`}
             onClick={() => setRestoreMode((v) => !v)}
-            title="Toggle restore mode — returns the device to a backup .reg captured before the changes were applied."
+            title="Toggle restore mode: returns the device to a backup .reg captured before the changes were applied."
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
@@ -329,7 +330,7 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
                 <span className="export-mode-radio" />
                 <span className="export-mode-text">
                   <strong>Platform Script</strong>
-                  <small>Single script — upload to Intune &gt; Devices &gt; Scripts</small>
+                  <small>Single script. Upload to Intune &gt; Devices &gt; Scripts</small>
                 </span>
               </label>
               <label className={`export-mode-option${mode === 'remediation' ? ' active' : ''}`}>
@@ -343,32 +344,41 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
                 <span className="export-mode-radio" />
                 <span className="export-mode-text">
                   <strong>Remediation Script</strong>
-                  <small>Two scripts — upload to Intune &gt; Scripts and Remediations &gt; Remediations</small>
+                  <small>Two scripts. Upload to Intune &gt; Scripts and Remediations &gt; Remediations</small>
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Automatic-backup safety card (apply mode) */}
-          {!restoreMode && (
-            <div className="export-safety">
-              <div className="export-safety-header">
+          {/* Backup toggle (applies to both apply and restore scripts) */}
+          <div className={`export-safety${includeBackup ? '' : ' off'}`}>
+              <label className="export-safety-header">
+                <input
+                  type="checkbox"
+                  checked={includeBackup}
+                  onChange={(e) => setIncludeBackup(e.target.checked)}
+                />
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 0 1 3v5c0 4 3 6.5 7 8 4-1.5 7-4 7-8V3L8 0zm0 1.5 5.5 2.4V8c0 3.1-2.2 5.1-5.5 6.4C4.7 13.1 2.5 11.1 2.5 8V3.9L8 1.5z"/>
+                  <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4.414a1 1 0 0 0-.293-.707l-2.414-2.414A1 1 0 0 0 11.586 1H2zm10 13H4v-4h8v4zM4 2v3h6V2H4z"/>
                 </svg>
-                Automatic backup before any change
-              </div>
+                Back up affected keys before changes
+              </label>
               <p className="export-safety-text">
-                Before writing anything, the script exports every key it touches to{' '}
-                <code>%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>.
-                This snapshot captures the device's <strong>real</strong> state — including data
-                RegBuddy can't see — so it's your reliable rollback. To undo, run{' '}
-                <code>reg import</code> on the saved <code>.reg</code> files.
+                {includeBackup ? (
+                  <>
+                    The script first saves every key it touches to a{' '}
+                    <code>backup.reg</code> under{' '}
+                    <code>%ProgramData%\RegBuddy\{profileName || 'RegBuddy'}-&lt;timestamp&gt;</code>{' '}
+                    (or <code>%TEMP%</code> if that is not writable). That file is your rollback: run{' '}
+                    <code>reg import</code> on it to undo. Leave this on unless you take backups another way.
+                  </>
+                ) : (
+                  <>No backup will be taken. The script applies changes with no automatic rollback point. Make sure you have your own backup first.</>
+                )}
               </p>
-            </div>
-          )}
+          </div>
 
-          {/* Restore mode — hidden input is always mounted so both the center
+          {/* Restore mode: hidden input is always mounted so both the center
               step button and the "change backup" button can trigger it. The
               upload instructions live in the center step, so once a backup is
               loaded we only show a compact status row here. */}
@@ -387,6 +397,13 @@ export const ExportScriptsDialog: React.FC<ExportScriptsDialogProps> = ({ onBack
               <span className="reversal-upload-file">✓ {backupName} loaded</span>
               <button className="confirmPage-btn" onClick={() => backupInputRef.current?.click()}>
                 Change backup…
+              </button>
+              <button
+                className="confirmPage-btn"
+                onClick={() => { setBackupContent(null); setBackupName(null); }}
+                title="Clear the uploaded backup and start over"
+              >
+                Clear
               </button>
             </div>
           )}
