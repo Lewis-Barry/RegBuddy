@@ -13,14 +13,11 @@ function renamedPath(c: RegistryChange): string {
  * Build a restore change-set from an uploaded backup — the .reg snapshot the
  * remediation script captured ON THE DEVICE before applying changes.
  *
- * The backup is the device's REAL prior state, so restoring to it is exact,
- * not a baseline guess. Two parts:
- *
- *   1. Re-apply everything the backup contains. This restores modified and
- *      deleted values, and recreates any key that existed before.
- *   2. Delete anything the change-set ADDED that the backup does not contain
- *      (added keys/values, plus rename targets). Deleting keys is safe here
- *      because the backup proves they weren't present before the change.
+ * Driven by the CHANGE-SET, not the backup: we only undo what was actually
+ * changed. The backup is `reg export` of each touched key, so it contains that
+ * key's entire subtree (thousands of untouched keys) — walking all of it would
+ * produce a giant script that recreates things we never modified. So for each
+ * change we look up its prior state in the backup and emit the inverse.
  *
  * `changes` is the applied change-set still loaded in the editor; `backup` is
  * the parsed uploaded snapshot.
@@ -30,55 +27,76 @@ export function computeBackupRestore(
   backup: RegistryKey,
 ): RegistryChange[] {
   const restore: RegistryChange[] = [];
+  const now = Date.now();
 
-  // 1. Re-apply the backup's contents (its true prior state).
-  (function walk(node: RegistryKey) {
+  const backupValue = (path: string, name?: string) =>
+    findKey(backup, path)?.values.find((v) => v.name === (name ?? ''));
+
+  // Recreate a key and its whole subtree from the backup (for deleted keys).
+  const recreateSubtree = (node: RegistryKey) => {
     if (node.path !== 'Computer' && !isHiveRoot(node.path)) {
-      restore.push({ id: revId(), type: 'add-key', path: node.path, timestamp: Date.now() });
+      restore.push({ id: revId(), type: 'add-key', path: node.path, timestamp: now });
     }
     for (const v of node.values) {
-      restore.push({
-        id: revId(),
-        type: 'add-value',
-        path: node.path,
-        valueName: v.name,
-        valueType: v.type,
-        newData: v.data,
-        timestamp: Date.now(),
-      });
+      restore.push({ id: revId(), type: 'add-value', path: node.path, valueName: v.name, valueType: v.type, newData: v.data, timestamp: now });
     }
-    node.children.forEach(walk);
-  })(backup);
+    node.children.forEach(recreateSubtree);
+  };
 
-  // 2. Delete additions the backup doesn't contain.
-  const keysToDelete = new Set<string>();
-  for (const c of changes) {
-    if (c.type === 'add-key' && !findKey(backup, c.path)) keysToDelete.add(c.path);
-    if (c.type === 'rename-key') {
-      const np = renamedPath(c);
-      if (np && !findKey(backup, np)) keysToDelete.add(np);
+  const restorePriorValue = (path: string, name?: string) => {
+    const bv = backupValue(path, name);
+    if (bv) {
+      restore.push({ id: revId(), type: 'add-value', path, valueName: bv.name, valueType: bv.type, newData: bv.data, timestamp: now });
+    } else {
+      // Wasn't present before → undo by removing it.
+      restore.push({ id: revId(), type: 'delete-value', path, valueName: name, timestamp: now });
     }
-  }
-  const underDeletedKey = (p: string) =>
-    [...keysToDelete].some((k) => p === k || p.startsWith(k + '\\'));
-
-  for (const path of keysToDelete) {
-    restore.push({ id: revId(), type: 'delete-key', path, timestamp: Date.now() });
-  }
+  };
 
   for (const c of changes) {
-    if (underDeletedKey(c.path)) continue; // whole key is being removed already
-    const backupKey = findKey(backup, c.path);
-    if (c.type === 'add-value' || c.type === 'modify-value') {
-      const present = backupKey?.values.some((v) => v.name === (c.valueName ?? ''));
-      if (!present) {
-        restore.push({ id: revId(), type: 'delete-value', path: c.path, valueName: c.valueName, timestamp: Date.now() });
+    switch (c.type) {
+      case 'add-key':
+        // We created it. If it pre-existed in the backup, leave it; else remove.
+        if (!findKey(backup, c.path)) {
+          restore.push({ id: revId(), type: 'delete-key', path: c.path, timestamp: now });
+        }
+        break;
+
+      case 'delete-key': {
+        // We removed it. Recreate exactly what the backup captured.
+        const bk = findKey(backup, c.path);
+        if (bk) recreateSubtree(bk);
+        break;
       }
-    } else if (c.type === 'rename-value') {
-      const present = backupKey?.values.some((v) => v.name === c.newName);
-      if (!present) {
-        restore.push({ id: revId(), type: 'delete-value', path: c.path, valueName: c.newName, timestamp: Date.now() });
+
+      case 'add-value':
+      case 'modify-value':
+        restorePriorValue(c.path, c.valueName);
+        break;
+
+      case 'delete-value': {
+        // We removed a value. Re-add it if the backup has it.
+        const bv = backupValue(c.path, c.valueName);
+        if (bv) restore.push({ id: revId(), type: 'add-value', path: c.path, valueName: bv.name, valueType: bv.type, newData: bv.data, timestamp: now });
+        break;
       }
+
+      case 'rename-key': {
+        // Remove the renamed-to key, recreate the original from backup.
+        const np = renamedPath(c);
+        if (np && !findKey(backup, np)) {
+          restore.push({ id: revId(), type: 'delete-key', path: np, timestamp: now });
+        }
+        const bk = findKey(backup, c.path);
+        if (bk) recreateSubtree(bk);
+        break;
+      }
+
+      case 'rename-value':
+        // Remove the renamed-to value, restore the original from backup.
+        if (c.newName) restore.push({ id: revId(), type: 'delete-value', path: c.path, valueName: c.newName, timestamp: now });
+        restorePriorValue(c.path, c.valueName);
+        break;
     }
   }
 
