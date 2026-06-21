@@ -349,13 +349,27 @@
   border-right: 1px solid var(--border-subtle);
 }
 
-.valueTable .col-name { width: 35%; }
-.valueTable .col-type { width: 20%; }
-.valueTable .col-data { width: 45%; }
+/* Column widths are driven by the <colgroup> (resizable). */
 
 .valueTable th.sortable {
   cursor: pointer;
   user-select: none;
+}
+
+/* Drag handle on the right edge of a header to resize that column. */
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 2;
+}
+
+.col-resizer:hover {
+  background: var(--accent);
 }
 
 .valueTable th.sortable:hover {
@@ -565,6 +579,49 @@
   background: var(--bg-surface);
   color: var(--text-primary);
   outline: none;
+}
+
+/* DWORD/QWORD: value field beside a Base group, regedit-style. The two columns
+   align at the top so the "Value data:" label lines up with the "Base" legend. */
+.dword-field {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dword-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.base-group {
+  flex-shrink: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px 8px;
+}
+
+.base-group legend {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.base-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: var(--font-size);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.base-group input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
 }
 
 .dialog-field input:focus,

@@ -107,6 +107,32 @@ export const ValuePanel: React.FC = () => {
   const [sortColumn, setSortColumn] = useState<'name' | 'type' | 'data' | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
 
+  // Resizable Name / Type columns (Data fills the remainder).
+  const [colW, setColW] = useState({ name: 280, type: 170 });
+  const resizing = useRef<{ col: 'name' | 'type'; startX: number; startW: number } | null>(null);
+
+  const startResize = (col: 'name' | 'type', e: React.MouseEvent) => {
+    resizing.current = { col, startX: e.clientX, startW: colW[col] };
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      const r = resizing.current;
+      if (!r) return;
+      const w = Math.max(60, r.startW + (e.clientX - r.startX));
+      setColW((prev) => ({ ...prev, [r.col]: w }));
+    };
+    const up = () => { resizing.current = null; };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    return () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+  }, []);
+
   const key = findKeyInTree(mergedTree, selectedPath);
   const rawValues = key?.values ?? [];
 
@@ -281,13 +307,28 @@ export const ValuePanel: React.FC = () => {
       onClick={() => setSelectedValue(null)}
     >
       <table className="valueTable">
+        <colgroup>
+          <col style={{ width: colW.name }} />
+          <col style={{ width: colW.type }} />
+          <col />
+        </colgroup>
         <thead>
           <tr>
             <th className="col-name sortable" onClick={() => handleSort('name')}>
               Name{sortIndicator('name')}
+              <span
+                className="col-resizer"
+                onMouseDown={(e) => startResize('name', e)}
+                onClick={(e) => e.stopPropagation()}
+              />
             </th>
             <th className="col-type sortable" onClick={() => handleSort('type')}>
               Type{sortIndicator('type')}
+              <span
+                className="col-resizer"
+                onMouseDown={(e) => startResize('type', e)}
+                onClick={(e) => e.stopPropagation()}
+              />
             </th>
             <th className="col-data sortable" onClick={() => handleSort('data')}>
               Data{sortIndicator('data')}
