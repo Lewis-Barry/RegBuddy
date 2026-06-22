@@ -62,9 +62,13 @@ const InlineEdit: React.FC<InlineEditProps> = ({ initialValue, onCommit, onCance
 interface TreeNodeProps {
   node: RegistryKey;
   depth: number;
+  /** continuation flag per ancestor indent slot (length = depth - 1) */
+  guides?: boolean[];
+  /** is this node the last child of its parent */
+  isLast?: boolean;
 }
 
-const TreeNode: React.FC<TreeNodeProps> = ({ node, depth }) => {
+const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, guides = [], isLast = true }) => {
   const selectedPath = useRegBuddyStore((s) => s.selectedPath);
   const expandedNodes = useRegBuddyStore((s) => s.expandedNodes);
   const selectKey = useRegBuddyStore((s) => s.selectKey);
@@ -260,18 +264,31 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth }) => {
     <>
       <div
         className={`treeNode${isSelected ? ' selected' : ''}${changeClass}`}
-        style={{ paddingLeft: depth * 20 + 4 }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       >
+        <span className="treeNode-guides">
+          {guides.map((cont, i) => (
+            <span key={i} className={`guide${cont ? ' v' : ''}`} />
+          ))}
+          {depth > 0 && (
+            <span className={`guide elbow${isLast ? ' last' : ''}${hasChildren ? '' : ' leaf'}`} />
+          )}
+        </span>
         <span
           className={`treeNode-arrow${hasChildren ? '' : ' empty'}`}
           onClick={hasChildren ? handleArrowClick : undefined}
         >
           {hasChildren && (
-            <svg width="10" height="10" viewBox="0 0 10 10" className={`treeNode-chevron${isExpanded ? ' expanded' : ''}`}>
-              <path d="M3 1 L7 5 L3 9" fill="none" stroke="#555" strokeWidth="1.2" />
+            <svg width="8" height="8" viewBox="0 0 10 10" className={`treeNode-chevron${isExpanded ? ' expanded' : ''}`}>
+              <path
+                d="M3 1.5 L8 5 L3 8.5 Z"
+                fill={isExpanded ? '#6d6d6d' : 'none'}
+                stroke={isExpanded ? '#6d6d6d' : '#9b9b9b'}
+                strokeWidth="1"
+                strokeLinejoin="round"
+              />
             </svg>
           )}
         </span>
@@ -296,8 +313,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth }) => {
       </div>
 
       {isExpanded &&
-        node.children.map((child) => (
-          <TreeNode key={child.path} node={child} depth={depth + 1} />
+        node.children.map((child, i) => (
+          <TreeNode
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            guides={depth === 0 ? [] : [...guides, !isLast]}
+            isLast={i === node.children.length - 1}
+          />
         ))}
 
       {contextMenu && (

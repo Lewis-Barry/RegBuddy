@@ -248,6 +248,59 @@
   white-space: nowrap;
 }
 
+/* Dotted connector lines, classic regedit style */
+.treeNode-guides {
+  display: flex;
+  flex-shrink: 0;
+  height: var(--row-height);
+}
+.guide {
+  position: relative;
+  width: 20px;
+  height: 100%;
+  flex-shrink: 0;
+}
+/* dots as a repeating gradient (period divides row-height) so the pattern
+   stays continuous across rows instead of resetting per cell */
+.guide.v::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-image: linear-gradient(#b0b0b0 50%, transparent 50%);
+  background-size: 1px 2px;
+}
+.guide.elbow::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 0;
+  height: 50%;
+  width: 1px;
+  background-image: linear-gradient(#b0b0b0 50%, transparent 50%);
+  background-size: 1px 2px;
+}
+.guide.elbow:not(.last)::before {
+  height: 100%;
+}
+.guide.elbow::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  width: 11px;
+  height: 1px;
+  background-image: linear-gradient(to right, #b0b0b0 50%, transparent 50%);
+  background-size: 2px 1px;
+}
+
+/* leaf nodes have no triangle, so run the line to the folder icon */
+.guide.elbow.leaf::after {
+  width: 28px;
+}
+
 .treeNode:hover {
   background: var(--bg-hover);
 }
@@ -272,10 +325,12 @@
 
 .treeNode-chevron {
   transition: transform 0.12s ease;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .treeNode-chevron.expanded {
-  transform: rotate(90deg);
+  transform: rotate(45deg);
 }
 
 .treeNode-icon {
